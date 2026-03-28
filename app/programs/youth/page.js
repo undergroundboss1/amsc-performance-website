@@ -1,0 +1,11 @@
+import ProgramDetail from '../../../components/ProgramDetail';
+import { programsData } from '../../../lib/programs';
+
+export const metadata = {
+  title: 'Youth Athletic Development | AMSC Performance',
+  description: 'Building athletic foundations for young athletes aged 10-17.',
+};
+
+export default function YouthPage() {
+  return <ProgramDetail program={{ ...programsData['youth'], slug: 'youth' }} />;
+}

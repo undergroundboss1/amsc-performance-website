@@ -8,8 +8,15 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        background: "var(--background)",
-        foreground: "var(--foreground)",
+        background: "#F4F2EE",
+        surface: "#EDEAE4",
+        text: "#1C1C1C",
+        secondary: "#4A4A4A",
+        accent: "#C1281B",
+      },
+      fontFamily: {
+        heading: ["Georgia", "serif"],
+        body: ["system-ui", "-apple-system", "sans-serif"],
       },
     },
   },
