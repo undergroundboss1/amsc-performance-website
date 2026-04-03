@@ -79,7 +79,7 @@ export default function ProgramsPage() {
           <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-16 items-center">
             <div className="aspect-[4/5] overflow-hidden">
               <img
-                src="/images/system-develop.jpg"
+                src="/images/system-results.jpg"
                 alt="Training at AMSC"
                 className="w-full h-full object-cover"
                 onError={(e) => {
@@ -117,7 +117,7 @@ export default function ProgramsPage() {
             </div>
             <div className="aspect-[4/5] overflow-hidden">
               <img
-                src="/images/system-assess.jpg"
+                src="/images/system-measure.jpg"
                 alt="Assessment equipment"
                 className="w-full h-full object-cover"
                 onError={(e) => {

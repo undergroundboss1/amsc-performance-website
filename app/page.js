@@ -1,6 +1,8 @@
 'use client';
 import Link from 'next/link';
+import { motion } from 'framer-motion';
 import AnimatedSection from '../components/AnimatedSection';
+import CountUp from '../components/CountUp';
 
 const athletes = [
   { name: 'Angela Wachira', desc: 'Midfielder · Mulligan Division 1 NCAA Soccer', image: '/images/athlete-angela.jpg' },
@@ -35,6 +37,13 @@ const systemCards = [
     desc: 'Speed metrics. Workload control. Objective benchmarks. If it doesn\'t transfer to sport, it doesn\'t matter.',
     image: '/images/system-transfer.jpg',
   },
+];
+
+const stats = [
+  { value: 50, suffix: '+', label: 'Athletes Trained' },
+  { value: 6, suffix: '', label: 'Sports' },
+  { value: 4, suffix: '+', label: 'Years' },
+  { value: 100, suffix: '%', label: 'Data-Driven' },
 ];
 
 const programs = [
@@ -93,44 +102,89 @@ const programs = [
   },
 ];
 
+const heroStagger = {
+  hidden: {},
+  visible: {
+    transition: { staggerChildren: 0.2, delayChildren: 0.3 },
+  },
+};
+
+const heroChild = {
+  hidden: { opacity: 0, y: 30 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: [0.25, 0.1, 0.25, 1] } },
+};
+
 export default function Home() {
   return (
     <>
       {/* Hero Section */}
-      <section
-        className="relative min-h-screen flex flex-col items-center justify-end pb-24 px-6 text-center"
-        style={{
-          backgroundImage: "url('/images/hero-athlete.jpg')",
-          backgroundSize: 'cover',
-          backgroundPosition: 'center top',
-          backgroundColor: '#0a0a0a',
-        }}
-      >
-        <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/20 to-black/70" />
-        <div className="relative z-10 max-w-4xl mx-auto">
-          <h1 className="text-white font-black text-6xl md:text-8xl tracking-[6px] mb-4">
-            AMSC
-          </h1>
-          <div className="text-white/80 text-lg md:text-2xl tracking-[0.5em] font-light mb-6">
-            PERFORMANCE
-          </div>
-          <p className="text-white/70 text-base md:text-lg tracking-[0.15em] uppercase mb-10">
-            Engineered Athlete Development
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link
-              href="/apply"
-              className="bg-accent text-white px-10 py-4 rounded-full text-sm font-semibold hover:bg-accent-dark transition-all duration-200 hover:shadow-lg hover:shadow-red-900/30 tracking-wide"
+      <section className="relative min-h-screen grid grid-cols-1 md:grid-cols-2">
+        {/* Left — Branding */}
+        <div className="bg-[#1a1a1a] flex flex-col justify-center px-8 md:px-16 py-24 md:py-0 order-2 md:order-1">
+          <motion.div
+            className="max-w-lg"
+            variants={heroStagger}
+            initial="hidden"
+            animate="visible"
+          >
+            <motion.img
+              src="/images/amsc-logo-hero.png"
+              alt="AMSC Performance"
+              className="w-[260px] md:w-[380px] mb-6"
+              variants={heroChild}
+            />
+            <motion.p
+              className="text-white/50 text-sm md:text-base tracking-[0.2em] uppercase mb-10"
+              variants={heroChild}
             >
-              Apply to Train with AMSC
-            </Link>
-            <Link
-              href="/programs"
-              className="border border-white/40 text-white px-10 py-4 rounded-full text-sm font-semibold hover:bg-white hover:text-text transition-all duration-200 tracking-wide"
+              Engineered Athlete Development
+            </motion.p>
+            <motion.div
+              className="flex flex-col sm:flex-row gap-4"
+              variants={heroChild}
             >
-              Explore Programs
-            </Link>
-          </div>
+              <Link
+                href="/apply"
+                className="bg-accent text-white px-10 py-4 rounded-full text-sm font-semibold hover:bg-accent-dark transition-all duration-200 hover:shadow-lg hover:shadow-red-900/30 tracking-wide text-center"
+              >
+                Apply to Train with AMSC
+              </Link>
+              <Link
+                href="/programs"
+                className="border border-white/20 text-white px-10 py-4 rounded-full text-sm font-semibold hover:bg-white hover:text-text transition-all duration-200 tracking-wide text-center"
+              >
+                Explore Programs
+              </Link>
+            </motion.div>
+          </motion.div>
+        </div>
+        {/* Right — Image */}
+        <div
+          className="relative min-h-[50vh] md:min-h-screen order-1 md:order-2"
+          style={{
+            backgroundImage: "url('/images/hero-athlete.jpg')",
+            backgroundSize: 'cover',
+            backgroundPosition: 'center top',
+            backgroundColor: '#0a0a0a',
+          }}
+        >
+          <div className="absolute inset-0 bg-black/20" />
+        </div>
+      </section>
+
+      {/* Stats Bar */}
+      <section className="bg-[#111] py-16 px-6 border-t border-white/5">
+        <div className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+          {stats.map((stat, i) => (
+            <AnimatedSection key={stat.label} delay={i * 0.1}>
+              <div>
+                <p className="text-white font-black text-4xl md:text-5xl tracking-tight">
+                  <CountUp end={stat.value} suffix={stat.suffix} duration={2} />
+                </p>
+                <p className="text-gray-500 text-xs tracking-[3px] uppercase mt-2">{stat.label}</p>
+              </div>
+            </AnimatedSection>
+          ))}
         </div>
       </section>
 
@@ -258,7 +312,7 @@ export default function Home() {
 
         <div className="max-w-7xl mx-auto">
           {/* One-on-One - Featured */}
-          <AnimatedSection>
+          <AnimatedSection delay={0.1}>
             <div className="card bg-[#fafafa] border-t-[3px] border-t-accent border border-gray-200 p-8 md:p-10 mb-8 max-w-2xl mx-auto">
               <span className="text-accent text-xs font-bold tracking-[3px]">
                 {programs[0].label}
@@ -289,7 +343,7 @@ export default function Home() {
           {/* Group and Online */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
             {programs.slice(1, 3).map((program, i) => (
-              <AnimatedSection key={program.slug} delay={i * 0.1}>
+              <AnimatedSection key={program.slug} delay={0.2 + i * 0.1}>
                 <div className="card bg-[#fafafa] border border-gray-200 p-8 md:p-10 h-full">
                   <span className="text-accent text-xs font-bold tracking-[3px]">
                     {program.label}
@@ -320,7 +374,7 @@ export default function Home() {
           </div>
 
           {/* Youth */}
-          <AnimatedSection>
+          <AnimatedSection delay={0.3}>
             <div className="card bg-[#fafafa] border border-gray-200 p-8 md:p-10 mb-8 max-w-2xl mx-auto">
               <span className="text-accent text-xs font-bold tracking-[3px]">
                 {programs[3].label}
@@ -349,7 +403,7 @@ export default function Home() {
           </AnimatedSection>
 
           {/* Team Consulting */}
-          <AnimatedSection>
+          <AnimatedSection delay={0.4}>
             <div className="card bg-[#fafafa] border border-gray-200 p-8 md:p-10 max-w-xl mx-auto text-center">
               <h3 className="font-bold text-2xl tracking-[2px] mb-4">Team & School Performance Consulting</h3>
               <p className="text-secondary mb-6 text-sm leading-relaxed">

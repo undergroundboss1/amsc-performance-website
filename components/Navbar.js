@@ -39,18 +39,9 @@ export default function Navbar() {
         {/* Logo */}
         <Link href="/" className="flex-shrink-0">
           <img
-            src="/images/amsc-logo.svg"
+            src="/images/amsc-icon.png"
             alt="AMSC Performance"
-            className="h-10"
-            onError={(e) => {
-              // Try PNG fallback
-              if (e.target.src.endsWith('.svg')) {
-                e.target.src = '/images/amsc-logo.png';
-              } else {
-                e.target.style.display = 'none';
-                e.target.parentElement.innerHTML = '<div class="font-bold text-xl tracking-tight"><span class="text-2xl font-black">AMSC</span><div class="text-[9px] tracking-[0.3em] font-normal -mt-1">PERFORMANCE</div></div>';
-              }
-            }}
+            className="h-9 w-auto transition-all duration-300"
           />
         </Link>
 
