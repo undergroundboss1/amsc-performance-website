@@ -78,9 +78,10 @@ export default function Navbar() {
 
         {/* Mobile Menu Button */}
         <button
-          className="md:hidden text-white/80 hover:text-white cursor-pointer"
+          className="md:hidden text-white/80 hover:text-white cursor-pointer p-2 -mr-2 min-w-[44px] min-h-[44px] flex items-center justify-center"
           onClick={() => setMobileOpen(!mobileOpen)}
           aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={mobileOpen}
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             {mobileOpen ? (
@@ -99,7 +100,7 @@ export default function Navbar() {
             <Link
               key={link.href}
               href={link.href}
-              className={`block font-display text-sm font-semibold tracking-widest uppercase ${
+              className={`block font-display text-sm font-semibold tracking-widest uppercase py-2 ${
                 pathname === link.href ? 'text-accent' : 'text-white/70'
               }`}
               onClick={() => setMobileOpen(false)}
