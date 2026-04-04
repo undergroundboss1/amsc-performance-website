@@ -11,6 +11,7 @@ const programs = [
     desc: 'High-touch coaching for athletes requiring individualized oversight and precision progression.',
     price: 'Ksh 30,000',
     image: '/images/program-one-on-one.jpg',
+    imagePosition: 'object-center',
   },
   {
     slug: 'group',
@@ -19,6 +20,7 @@ const programs = [
     desc: 'Structured in-person training within a high-performance environment.',
     price: 'Ksh 15,000',
     image: '/images/program-group.jpg',
+    imagePosition: 'object-center',
   },
   {
     slug: 'online',
@@ -27,6 +29,7 @@ const programs = [
     desc: 'Structured performance programming for athletes and driven individuals training remotely.',
     price: 'Ksh 12,000',
     image: '/images/program-online.jpg',
+    imagePosition: 'object-top',
   },
   {
     slug: 'youth',
@@ -35,6 +38,7 @@ const programs = [
     desc: 'Building athletic foundations for young athletes aged 10–17.',
     price: 'Ksh 10,000',
     image: '/images/program-youth.jpg',
+    imagePosition: 'object-top',
   },
   {
     slug: 'consulting',
@@ -43,6 +47,7 @@ const programs = [
     desc: 'Performance system implementation for teams and institutions.',
     price: 'Contact',
     image: '/images/program-consulting.jpg',
+    imagePosition: 'object-center',
   },
 ];
 
@@ -149,7 +154,7 @@ export default function ProgramsPage() {
                     alt={program.name}
                     fill
                     sizes="(max-width: 768px) 100vw, 33vw"
-                    className="object-cover"
+                    className={`object-cover ${program.imagePosition}`}
                   />
                 </div>
                 <div className="p-8 md:col-span-2 flex flex-col justify-center">

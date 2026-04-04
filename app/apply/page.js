@@ -16,7 +16,7 @@ function ApplyContent() {
   const program = searchParams.get('program');
   const programName = program ? programNames[program] : null;
 
-  const tallySrc = `https://tally.so/embed/nPBdJk?alignLeft=1&hideTitle=1&transparentBackground=1&dynamicHeight=1${program ? `&program=${encodeURIComponent(programName || program)}` : ''}`;
+  const tallySrc = `https://tally.so/embed/Pd1g9V?alignLeft=1&hideTitle=1&transparentBackground=1&dynamicHeight=1${program ? `&program=${encodeURIComponent(programName || program)}` : ''}`;
 
   useEffect(() => {
     // Directly set iframe src to ensure it loads
