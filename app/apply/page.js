@@ -1,6 +1,6 @@
 'use client';
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useEffect } from 'react';
+import { Suspense, useEffect, useRef } from 'react';
 
 const programNames = {
   'one-on-one': 'One-on-One Coaching',
@@ -12,32 +12,33 @@ const programNames = {
 
 function ApplyContent() {
   const searchParams = useSearchParams();
+  const iframeRef = useRef(null);
   const program = searchParams.get('program');
   const programName = program ? programNames[program] : null;
 
+  const tallySrc = `https://tally.so/embed/nPBdJk?alignLeft=1&hideTitle=1&transparentBackground=1&dynamicHeight=1${program ? `&program=${encodeURIComponent(programName || program)}` : ''}`;
+
   useEffect(() => {
-    const loadTally = () => {
-      if (typeof window.Tally !== 'undefined') {
-        window.Tally.loadEmbeds();
-      } else {
-        const existingScript = document.querySelector('script[src="https://tally.so/widgets/embed.js"]');
-        if (!existingScript) {
-          const script = document.createElement('script');
-          script.src = 'https://tally.so/widgets/embed.js';
-          script.onload = () => {
-            if (typeof window.Tally !== 'undefined') {
-              window.Tally.loadEmbeds();
-            }
-          };
-          document.body.appendChild(script);
+    // Directly set iframe src to ensure it loads
+    if (iframeRef.current) {
+      iframeRef.current.src = tallySrc;
+    }
+
+    // Also load the Tally widget script for auto-resize
+    const existingScript = document.querySelector('script[src="https://tally.so/widgets/embed.js"]');
+    if (!existingScript) {
+      const script = document.createElement('script');
+      script.src = 'https://tally.so/widgets/embed.js';
+      script.onload = () => {
+        if (typeof window.Tally !== 'undefined') {
+          window.Tally.loadEmbeds();
         }
-      }
-    };
-
-    loadTally();
-  }, []);
-
-  const tallySrc = `https://tally.so/embed/nPBdJk?alignLeft=1&hideTitle=1&transparentBackground=1${program ? `&program=${encodeURIComponent(programName || program)}` : ''}`;
+      };
+      document.body.appendChild(script);
+    } else if (typeof window.Tally !== 'undefined') {
+      window.Tally.loadEmbeds();
+    }
+  }, [tallySrc]);
 
   return (
     <section className="py-12 px-6 bg-background min-h-[80vh] pt-24">
@@ -57,16 +58,17 @@ function ApplyContent() {
         </div>
 
         {/* Tally.so Embed */}
-        <div className="bg-surface border border-white/5 rounded-lg p-2">
+        <div className="bg-surface border border-white/5 rounded-lg p-4">
           <iframe
+            ref={iframeRef}
             data-tally-src={tallySrc}
-            loading="lazy"
             width="100%"
             height="800"
             frameBorder="0"
             marginHeight="0"
             marginWidth="0"
             title="AMSC Application Form"
+            style={{ background: 'transparent' }}
           />
         </div>
       </div>
