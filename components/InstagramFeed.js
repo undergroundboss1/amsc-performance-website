@@ -1,17 +1,7 @@
 'use client';
-import { useEffect } from 'react';
+import Script from 'next/script';
 
 export default function InstagramFeed() {
-  useEffect(() => {
-    const existingScript = document.querySelector('script[src="https://w.behold.so/widget.js"]');
-    if (!existingScript) {
-      const script = document.createElement('script');
-      script.type = 'module';
-      script.src = 'https://w.behold.so/widget.js';
-      document.head.appendChild(script);
-    }
-  }, []);
-
   return (
     <section className="py-32 px-6 bg-surface">
       <div className="max-w-7xl mx-auto text-center mb-16">
@@ -35,6 +25,11 @@ export default function InstagramFeed() {
           Follow @amscperformance
         </a>
       </div>
+      <Script
+        src="https://w.behold.so/widget.js"
+        type="module"
+        strategy="lazyOnload"
+      />
     </section>
   );
 }

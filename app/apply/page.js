@@ -1,6 +1,7 @@
 'use client';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useRef } from 'react';
+import Script from 'next/script';
 
 const programNames = {
   'one-on-one': 'One-on-One Coaching',
@@ -19,26 +20,16 @@ function ApplyContent() {
   const tallySrc = `https://tally.so/embed/Pd1g9V?alignLeft=1&hideTitle=1&transparentBackground=1&dynamicHeight=1${program ? `&program=${encodeURIComponent(programName || program)}` : ''}`;
 
   useEffect(() => {
-    // Directly set iframe src to ensure it loads
     if (iframeRef.current) {
       iframeRef.current.src = tallySrc;
     }
+  }, [tallySrc]);
 
-    // Also load the Tally widget script for auto-resize
-    const existingScript = document.querySelector('script[src="https://tally.so/widgets/embed.js"]');
-    if (!existingScript) {
-      const script = document.createElement('script');
-      script.src = 'https://tally.so/widgets/embed.js';
-      script.onload = () => {
-        if (typeof window.Tally !== 'undefined') {
-          window.Tally.loadEmbeds();
-        }
-      };
-      document.body.appendChild(script);
-    } else if (typeof window.Tally !== 'undefined') {
+  function handleTallyLoad() {
+    if (typeof window.Tally !== 'undefined') {
       window.Tally.loadEmbeds();
     }
-  }, [tallySrc]);
+  }
 
   return (
     <section className="py-12 px-6 bg-background min-h-[80vh] pt-24">
@@ -71,6 +62,11 @@ function ApplyContent() {
             style={{ background: 'transparent' }}
           />
         </div>
+        <Script
+          src="https://tally.so/widgets/embed.js"
+          strategy="lazyOnload"
+          onLoad={handleTallyLoad}
+        />
       </div>
     </section>
   );

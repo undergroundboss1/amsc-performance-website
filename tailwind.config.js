@@ -21,8 +21,8 @@ module.exports = {
         border: "rgba(255,255,255,0.08)",
       },
       fontFamily: {
-        display: ["'Barlow Condensed'", "sans-serif"],
-        body: ["'Barlow'", "sans-serif"],
+        display: ["var(--font-barlow-condensed)", "sans-serif"],
+        body: ["var(--font-barlow)", "sans-serif"],
       },
       letterSpacing: {
         'widest-xl': '0.25em',
