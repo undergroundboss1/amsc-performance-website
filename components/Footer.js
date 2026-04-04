@@ -49,7 +49,7 @@ export default function Footer() {
           <div>
             <h4 className="font-display font-bold text-sm uppercase tracking-[0.2em] mb-5 text-white">Connect</h4>
             <a
-              href="https://instagram.com"
+              href="https://instagram.com/amscperformance"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-white/10 text-secondary hover:text-accent hover:border-accent transition-colors cursor-pointer"

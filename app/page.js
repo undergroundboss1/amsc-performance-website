@@ -142,12 +142,12 @@ export default function Home() {
             />
           </motion.div>
 
-          <motion.p
+          <motion.h1
             className="font-display text-white/40 text-sm md:text-base tracking-[0.3em] uppercase mb-12"
             variants={heroChild}
           >
             Engineered Athlete Development
-          </motion.p>
+          </motion.h1>
 
           <motion.div
             className="flex flex-col sm:flex-row gap-4 justify-center"
