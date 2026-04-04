@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { motion } from 'framer-motion';
 import AnimatedSection from '../components/AnimatedSection';
 import CountUp from '../components/CountUp';
+import InstagramFeed from '../components/InstagramFeed';
 
 const athletes = [
   { name: 'Angela Wachira', desc: 'Midfielder · Mulligan Division 1 NCAA Soccer', image: '/images/athlete-angela.jpg' },
@@ -298,6 +299,9 @@ export default function Home() {
           </div>
         </AnimatedSection>
       </section>
+
+      {/* Instagram Feed */}
+      <InstagramFeed />
 
       {/* Choose Your Training Pathway */}
       <section className="py-32 px-6 bg-background">
