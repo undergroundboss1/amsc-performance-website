@@ -1,28 +1,11 @@
 'use client';
-import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useConsent } from './ConsentContext';
 
 export default function CookieConsent() {
-  const [visible, setVisible] = useState(false);
+  const { consent, accept, decline } = useConsent();
 
-  useEffect(() => {
-    const consent = localStorage.getItem('cookie-consent');
-    if (!consent) {
-      setVisible(true);
-    }
-  }, []);
-
-  function accept() {
-    localStorage.setItem('cookie-consent', 'accepted');
-    setVisible(false);
-  }
-
-  function decline() {
-    localStorage.setItem('cookie-consent', 'declined');
-    setVisible(false);
-  }
-
-  if (!visible) return null;
+  if (consent !== null) return null;
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 bg-surface border-t border-white/10 px-6 py-4">

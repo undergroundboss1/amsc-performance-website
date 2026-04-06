@@ -17,6 +17,11 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  useEffect(() => {
+    document.body.style.overflow = mobileOpen ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [mobileOpen]);
+
   const links = [
     { href: '/', label: 'Home' },
     { href: '/programs', label: 'Programs' },

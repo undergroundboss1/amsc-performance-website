@@ -6,6 +6,6 @@ export default function robots() {
         allow: '/',
       },
     ],
-    sitemap: 'https://amsc-performance.vercel.app/sitemap.xml',
+    sitemap: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://amsc-performance.vercel.app'}/sitemap.xml`,
   };
 }

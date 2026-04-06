@@ -1,5 +1,5 @@
 export default function sitemap() {
-  const baseUrl = 'https://amsc-performance.vercel.app';
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://amsc-performance.vercel.app';
 
   return [
     { url: baseUrl, lastModified: new Date(), changeFrequency: 'weekly', priority: 1.0 },

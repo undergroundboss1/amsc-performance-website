@@ -1,7 +1,12 @@
 'use client';
 import Script from 'next/script';
+import Link from 'next/link';
+import { useConsent } from './ConsentContext';
 
 export default function InstagramFeed() {
+  const { consent } = useConsent();
+  const allowed = consent === 'accepted';
+
   return (
     <section className="py-32 px-6 bg-surface">
       <div className="max-w-7xl mx-auto text-center mb-16">
@@ -13,7 +18,23 @@ export default function InstagramFeed() {
         </p>
       </div>
       <div className="max-w-7xl mx-auto">
-        <behold-widget feed-id="az3ln0lhjRin0SMMW0f4"></behold-widget>
+        {allowed ? (
+          <behold-widget feed-id="az3ln0lhjRin0SMMW0f4"></behold-widget>
+        ) : (
+          <div className="text-center py-16 border border-white/5 rounded-lg bg-surface-light">
+            <p className="text-secondary text-sm font-body mb-4">
+              Accept cookies to view our live Instagram feed.
+            </p>
+            <a
+              href="https://instagram.com/amscperformance"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-accent hover:underline text-sm font-body"
+            >
+              View on Instagram instead
+            </a>
+          </div>
+        )}
       </div>
       <div className="text-center mt-10">
         <a
@@ -25,11 +46,13 @@ export default function InstagramFeed() {
           Follow @amscperformance
         </a>
       </div>
-      <Script
-        src="https://w.behold.so/widget.js"
-        type="module"
-        strategy="lazyOnload"
-      />
+      {allowed && (
+        <Script
+          src="https://w.behold.so/widget.js"
+          type="module"
+          strategy="lazyOnload"
+        />
+      )}
     </section>
   );
 }

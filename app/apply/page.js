@@ -2,22 +2,26 @@
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useRef } from 'react';
 import Script from 'next/script';
+import Link from 'next/link';
 
 import { programsData } from '../../lib/programs';
+import { useConsent } from '../../components/ConsentContext';
 
 function ApplyContent() {
   const searchParams = useSearchParams();
   const iframeRef = useRef(null);
+  const { consent } = useConsent();
+  const allowed = consent === 'accepted';
   const program = searchParams.get('program');
   const programName = program && programsData[program] ? programsData[program].name : null;
 
   const tallySrc = `https://tally.so/embed/Pd1g9V?alignLeft=1&hideTitle=1&transparentBackground=1&dynamicHeight=1${program ? `&program=${encodeURIComponent(programName || program)}` : ''}`;
 
   useEffect(() => {
-    if (iframeRef.current) {
+    if (iframeRef.current && allowed) {
       iframeRef.current.src = tallySrc;
     }
-  }, [tallySrc]);
+  }, [tallySrc, allowed]);
 
   function handleTallyLoad() {
     if (typeof window.Tally !== 'undefined') {
@@ -42,25 +46,42 @@ function ApplyContent() {
           </p>
         </div>
 
-        {/* Tally.so Embed */}
-        <div className="bg-surface border border-white/5 rounded-lg p-4">
-          <iframe
-            ref={iframeRef}
-            data-tally-src={tallySrc}
-            width="100%"
-            height="800"
-            frameBorder="0"
-            marginHeight="0"
-            marginWidth="0"
-            title="AMSC Application Form"
-            style={{ background: 'transparent' }}
+        {allowed ? (
+          <div className="bg-surface border border-white/5 rounded-lg p-4">
+            <iframe
+              ref={iframeRef}
+              data-tally-src={tallySrc}
+              width="100%"
+              height="800"
+              frameBorder="0"
+              marginHeight="0"
+              marginWidth="0"
+              title="AMSC Application Form"
+              style={{ background: 'transparent' }}
+            />
+          </div>
+        ) : (
+          <div className="bg-surface border border-white/5 rounded-lg p-8 text-center">
+            <p className="text-secondary text-sm font-body mb-4">
+              Please accept cookies to load the application form, or apply directly on Tally.
+            </p>
+            <a
+              href="https://tally.so/r/Pd1g9V"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block bg-accent text-white px-8 py-3 rounded-full font-display font-bold text-sm tracking-wider uppercase hover:bg-accent-dark transition-all duration-200"
+            >
+              Apply on Tally.so
+            </a>
+          </div>
+        )}
+        {allowed && (
+          <Script
+            src="https://tally.so/widgets/embed.js"
+            strategy="lazyOnload"
+            onLoad={handleTallyLoad}
           />
-        </div>
-        <Script
-          src="https://tally.so/widgets/embed.js"
-          strategy="lazyOnload"
-          onLoad={handleTallyLoad}
-        />
+        )}
       </div>
     </section>
   );
