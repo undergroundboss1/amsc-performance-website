@@ -26,6 +26,7 @@ export default function Navbar() {
     { href: '/', label: 'Home' },
     { href: '/programs', label: 'Programs' },
     { href: '/philosophy', label: 'Philosophy' },
+    { href: '/reports', label: 'Reports' },
     { href: '/member-portal', label: 'Member Portal' },
   ];
 

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
+import * as Sentry from '@sentry/nextjs';
 import { getSupabase } from '../../../../lib/supabase';
 
 /**
@@ -18,22 +19,31 @@ import { getSupabase } from '../../../../lib/supabase';
  */
 export async function POST(request) {
   try {
+    // Verify webhook secret is configured — fail hard if missing
+    const webhookSecret = process.env.INTASEND_WEBHOOK_SECRET;
+    if (!webhookSecret) {
+      console.error('IntaSend webhook: INTASEND_WEBHOOK_SECRET is not configured — rejecting all webhook requests');
+      return NextResponse.json({ error: 'Webhook not configured' }, { status: 401 });
+    }
+
+    // Verify signature header is present
+    const signature = request.headers.get('x-intasend-signature');
+    if (!signature) {
+      console.warn('IntaSend webhook: Missing x-intasend-signature header');
+      return NextResponse.json({ error: 'Missing signature' }, { status: 401 });
+    }
+
     const rawBody = await request.text();
 
-    // Verify webhook signature if secret is configured
-    const signature = request.headers.get('x-intasend-signature');
-    const webhookSecret = process.env.INTASEND_WEBHOOK_SECRET;
+    // Verify HMAC-SHA256 signature
+    const expectedSignature = crypto
+      .createHmac('sha256', webhookSecret)
+      .update(rawBody)
+      .digest('hex');
 
-    if (webhookSecret && signature) {
-      const expectedSignature = crypto
-        .createHmac('sha256', webhookSecret)
-        .update(rawBody)
-        .digest('hex');
-
-      if (signature !== expectedSignature) {
-        console.warn('IntaSend webhook: Invalid signature');
-        return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
-      }
+    if (signature !== expectedSignature) {
+      console.warn('IntaSend webhook: Invalid signature');
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
     }
 
     // Parse the verified payload
@@ -93,6 +103,8 @@ export async function POST(request) {
     return NextResponse.json({ message: 'Webhook processed' }, { status: 200 });
   } catch (err) {
     console.error('IntaSend webhook error:', err);
+    Sentry.captureException(err, { tags: { webhook: 'intasend' } });
+    // Return 200 to prevent IntaSend from retrying on our bugs
     return NextResponse.json({ message: 'Error processing webhook' }, { status: 200 });
   }
 }

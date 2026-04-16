@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
+import * as Sentry from '@sentry/nextjs';
 import { getSupabase } from '../../../../lib/supabase';
 
 /**
@@ -74,6 +75,7 @@ export async function POST(request) {
     return NextResponse.json({ message: 'Webhook processed' }, { status: 200 });
   } catch (err) {
     console.error('Paystack webhook error:', err);
+    Sentry.captureException(err, { tags: { webhook: 'paystack' } });
     // Return 200 to prevent Paystack from retrying on our bugs
     return NextResponse.json({ message: 'Error processing webhook' }, { status: 200 });
   }

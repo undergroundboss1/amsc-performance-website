@@ -1,3 +1,5 @@
+import { withSentryConfig } from '@sentry/nextjs';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   async headers() {
@@ -33,7 +35,7 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://tally.so https://w.behold.so https://js.paystack.co",
+              "script-src 'self' 'unsafe-inline' https://tally.so https://w.behold.so https://js.paystack.co",
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: https: blob:",
               "font-src 'self' data:",
@@ -51,4 +53,20 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+
+  // Upload wider set of client source files for readable stack traces
+  widenClientFileUpload: true,
+
+  // Proxy Sentry requests through our own domain to bypass ad-blockers
+  tunnelRoute: '/monitoring',
+
+  // Suppress build output outside of CI
+  silent: !process.env.CI,
+
+  // Hide source map files from the deployed bundle
+  hideSourceMaps: true,
+});
