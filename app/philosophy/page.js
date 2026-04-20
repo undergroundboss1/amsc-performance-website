@@ -34,15 +34,27 @@ export default function PhilosophyPage() {
   return (
     <>
       {/* Hero */}
-      <section className="relative min-h-[70vh] flex flex-col items-center justify-center bg-background text-white px-6 text-center">
-        <AnimatedSection>
-          <h1 className="font-display font-black text-4xl md:text-6xl leading-tight mb-6 tracking-widest">
+      <section className="relative min-h-[70vh] flex flex-col items-center justify-center text-white px-6 text-center overflow-hidden">
+        {/* Background image */}
+        <div
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+          style={{ backgroundImage: "url('/images/hero-philosophy.jpg')" }}
+        />
+        {/* Overlays */}
+        <div className="absolute inset-0 bg-black/65" />
+        <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-background/70" />
+
+        <AnimatedSection className="relative z-10">
+          <h1 className="font-display font-black text-4xl md:text-6xl leading-tight mb-6 tracking-widest drop-shadow-lg">
             TRAINING IS NOT RANDOM.{' '}<span className="block md:inline">IT&apos;S ENGINEERED.</span>
           </h1>
-          <p className="text-secondary text-base max-w-2xl mx-auto leading-relaxed font-body">
+          <p className="text-white/60 text-base max-w-2xl mx-auto leading-relaxed font-body drop-shadow">
             At AMSC PERFORMANCE, every athlete follows a structured system designed to develop strength, improve movement, and transfer performance to sport.
           </p>
         </AnimatedSection>
+
+        {/* Bottom fade */}
+        <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-surface to-transparent" />
       </section>
 
       {/* Philosophy Statements */}
