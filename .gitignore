@@ -37,3 +37,14 @@ next-env.d.ts
 
 # Sentry auth token (never commit)
 .env.sentry-build-plugin
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Engine generated outputs (PDFs)
+engine/reports/
+
+# Claude IDE session files
+.claude/

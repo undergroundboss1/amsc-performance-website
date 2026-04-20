@@ -236,6 +236,12 @@ export default function AdminPage() {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState('pending_review');
+  const [activeSection, setActiveSection] = useState('applications');
+  const [uploadFile, setUploadFile] = useState(null);
+  const [uploadDate, setUploadDate] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState(null);
+  const [uploadError, setUploadError] = useState('');
 
   function handleLogin(password) {
     if (!password.trim()) {
@@ -271,6 +277,61 @@ export default function AdminPage() {
     }
   }
 
+  async function handleUpload(e) {
+    e.preventDefault();
+    if (!uploadFile || !uploadDate) return;
+    setUploading(true);
+    setUploadResult(null);
+    setUploadError('');
+
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(uploadFile);
+      });
+
+      const res = await fetch('/api/admin/upload-results', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminKey}`,
+        },
+        body: JSON.stringify({ file: base64, filename: uploadFile.name, eventDate: uploadDate }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) { setUploadError(data.error || 'Upload failed.'); return; }
+      setUploadResult(data);
+      setUploadFile(null);
+      const fileInput = document.getElementById('excel-upload');
+      if (fileInput) fileInput.value = '';
+    } catch {
+      setUploadError('Upload failed. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function downloadAccessCodes(results) {
+    const csv = [
+      'Athlete Name,Access Code,Sport,Acceleration,Max Velocity,Power',
+      ...results.map(r =>
+        `"${r.athlete_name}",${r.access_code},"${r.sport || ''}","${r.acceleration_category || ''}","${r.max_velocity_category || ''}","${r.power_category || ''}"`
+      ),
+    ].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `AMSC_access_codes_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
   useEffect(() => {
     if (authenticated) fetchClients();
   }, [authenticated, filter]);
@@ -303,6 +364,28 @@ export default function AdminPage() {
           </button>
         </div>
 
+        {/* Section tabs */}
+          <div className="flex gap-1 mb-8 bg-surface border border-white/5 rounded-full p-1 w-fit">
+            <button
+              onClick={() => setActiveSection('applications')}
+              className={`px-5 py-2 rounded-full text-sm font-display font-semibold tracking-wider transition-all duration-200 ${
+                activeSection === 'applications' ? 'bg-accent text-white' : 'text-secondary hover:text-white'
+              }`}
+            >
+              Applications
+            </button>
+            <button
+              onClick={() => setActiveSection('upload')}
+              className={`px-5 py-2 rounded-full text-sm font-display font-semibold tracking-wider transition-all duration-200 ${
+                activeSection === 'upload' ? 'bg-accent text-white' : 'text-secondary hover:text-white'
+              }`}
+            >
+              Upload Results
+            </button>
+          </div>
+
+        {activeSection === 'applications' && (
+          <div>
         {/* Filter Tabs */}
         <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
           {filterOptions.map((opt) => (
@@ -340,6 +423,127 @@ export default function AdminPage() {
             />
           ))
         )}
+          </div>
+        )}
+
+          {activeSection === 'upload' && (
+            <div>
+              <form onSubmit={handleUpload} className="bg-surface border border-white/5 rounded-lg p-6 mb-6">
+                <h2 className="font-display font-bold text-lg tracking-wider mb-6">UPLOAD COMBINE RESULTS</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-xs font-display font-semibold tracking-wider text-secondary mb-2">SESSION DATE</label>
+                    <input
+                      type="date"
+                      value={uploadDate}
+                      onChange={e => setUploadDate(e.target.value)}
+                      required
+                      className="w-full bg-background border border-white/10 rounded-lg px-4 py-3 text-text font-body text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-display font-semibold tracking-wider text-secondary mb-2">EXCEL FILE (.xlsx)</label>
+                    <input
+                      id="excel-upload"
+                      type="file"
+                      accept=".xlsx"
+                      onChange={e => setUploadFile(e.target.files[0] || null)}
+                      required
+                      className="w-full bg-background border border-white/10 rounded-lg px-4 py-3 text-text font-body text-sm focus:outline-none focus:border-accent transition-all file:mr-3 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-accent/20 file:text-accent hover:file:bg-accent/30"
+                    />
+                  </div>
+                </div>
+                {uploadFile && (
+                  <p className="text-secondary text-xs font-body mb-4">{uploadFile.name} — {(uploadFile.size / 1024).toFixed(0)} KB</p>
+                )}
+                <button
+                  type="submit"
+                  disabled={uploading || !uploadFile || !uploadDate}
+                  className="w-full bg-accent text-white py-3 rounded-full font-display font-bold text-sm tracking-wider uppercase hover:bg-accent-dark transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {uploading ? 'Processing…' : 'Process & Upload'}
+                </button>
+                {uploading && (
+                  <p className="text-secondary text-xs font-body text-center mt-3">
+                    Running engine — this may take 10–30 seconds on first run…
+                  </p>
+                )}
+              </form>
+
+              {uploadError && (
+                <div className="bg-red-900/20 border border-red-500/20 rounded-lg px-4 py-3 mb-6">
+                  <p className="text-red-400 text-sm font-body">{uploadError}</p>
+                </div>
+              )}
+
+              {uploadResult && (
+                <div className="bg-surface border border-white/5 rounded-lg p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="font-display font-bold text-lg tracking-wider">
+                        {uploadResult.inserted} athlete{uploadResult.inserted !== 1 ? 's' : ''} uploaded
+                      </h3>
+                      {uploadResult.errors?.length > 0 && (
+                        <p className="text-yellow-400 text-xs font-body mt-1">
+                          {uploadResult.errors.length} athlete(s) had errors and were skipped
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => downloadAccessCodes(uploadResult.results)}
+                      className="bg-accent/10 border border-accent/30 text-accent px-4 py-2 rounded-lg font-display font-bold text-xs tracking-wider uppercase hover:bg-accent hover:text-white transition-all duration-200"
+                    >
+                      Download Access Codes CSV
+                    </button>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm font-body">
+                      <thead>
+                        <tr className="border-b border-white/10">
+                          <th className="text-left text-xs font-display tracking-wider text-secondary py-2 pr-4">ATHLETE</th>
+                          <th className="text-left text-xs font-display tracking-wider text-secondary py-2 pr-4">ACCESS CODE</th>
+                          <th className="text-left text-xs font-display tracking-wider text-secondary py-2 pr-4">ACCEL</th>
+                          <th className="text-left text-xs font-display tracking-wider text-secondary py-2 pr-4">MAX V</th>
+                          <th className="text-left text-xs font-display tracking-wider text-secondary py-2">POWER</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {uploadResult.results.map((r) => (
+                          <tr key={r.id} className="border-b border-white/5">
+                            <td className="py-2 pr-4 text-text">{r.athlete_name}</td>
+                            <td className="py-2 pr-4">
+                              <span className="font-mono text-accent text-xs bg-accent/10 px-2 py-1 rounded">{r.access_code}</span>
+                            </td>
+                            <td className={`py-2 pr-4 text-xs ${r.acceleration_category === 'Advanced' ? 'text-green-400' : r.acceleration_category === 'Competitive' ? 'text-yellow-400' : 'text-red-400'}`}>
+                              {r.acceleration_category || '—'}
+                            </td>
+                            <td className={`py-2 pr-4 text-xs ${r.max_velocity_category === 'Advanced' ? 'text-green-400' : r.max_velocity_category === 'Competitive' ? 'text-yellow-400' : 'text-red-400'}`}>
+                              {r.max_velocity_category || '—'}
+                            </td>
+                            <td className={`py-2 text-xs ${r.power_category === 'Advanced' ? 'text-green-400' : r.power_category === 'Competitive' ? 'text-yellow-400' : 'text-red-400'}`}>
+                              {r.power_category || '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {uploadResult.warnings?.length > 0 && (
+                    <details className="mt-4">
+                      <summary className="text-yellow-400/70 text-xs font-body cursor-pointer hover:text-yellow-400">
+                        {uploadResult.warnings.length} data warning(s)
+                      </summary>
+                      <ul className="mt-2 space-y-1">
+                        {uploadResult.warnings.map((w, i) => (
+                          <li key={i} className="text-yellow-400/60 text-xs font-body">• {w}</li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
       </div>
     </section>
   );

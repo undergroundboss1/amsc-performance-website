@@ -8,20 +8,18 @@ Sentry.init({
   // 100% in dev, 10% in production
   tracesSampleRate: process.env.NODE_ENV === 'development' ? 1.0 : 0.1,
 
-  // Session Replay: 10% of all sessions, 100% of sessions with errors
+  // Replay 10% of sessions, 100% on error
   replaysSessionSampleRate: 0.1,
   replaysOnErrorSampleRate: 1.0,
 
-  enableLogs: true,
-
   integrations: [
     Sentry.replayIntegration({
-      // Mask all text and block all media for user privacy
+      // Mask all text and block all media by default for privacy
       maskAllText: true,
       blockAllMedia: true,
     }),
   ],
 });
 
-// Hook into App Router navigation transitions
+// Captures client-side navigation transitions as Sentry spans
 export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;

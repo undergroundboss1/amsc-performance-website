@@ -1,0 +1,10 @@
+{
+  "functions": {
+    "api/generate-report.py": {
+      "maxDuration": 60
+    },
+    "api/process-batch.py": {
+      "maxDuration": 60
+    }
+  }
+}
