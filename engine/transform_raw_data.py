@@ -174,7 +174,7 @@ def _transform_sprint_row(row: pd.Series) -> dict:
     age    = row.get("age", "")
     notes  = str(row.get("notes", "")) if pd.notna(row.get("notes")) else ""
 
-    # Sprint bests
+    # Sprint bests 
     # Prefer computed best from attempts; fall back to template's Best column
     m20 = (
         _best_of(row.get("m20_a1"), row.get("m20_a2"), row.get("m20_a3"))
@@ -193,7 +193,7 @@ def _transform_sprint_row(row: pd.Series) -> dict:
         or _safe_float(row.get("m100_best"))
     )
 
-    # Derived splits
+    # Derived splits 
     # 60m and 80m are not directly measured — interpolate from 40m + 100m
     if m40 and m100:
         gap = m100 - m40
@@ -260,6 +260,7 @@ def _transform_jump_row(row: pd.Series) -> dict:
         "cmj_cm":   cmj,
         "broad_cm": broad,
     }
+
 
 
 # ── Main entry points ──────────────────────────────────────────

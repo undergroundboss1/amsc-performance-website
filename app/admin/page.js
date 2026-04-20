@@ -428,6 +428,21 @@ export default function AdminPage() {
 
           {activeSection === 'upload' && (
             <div>
+              {/* Template Download */}
+              <div className="flex items-center justify-between bg-surface border border-white/5 rounded-lg px-5 py-4 mb-4">
+                <div>
+                  <p className="font-display font-semibold text-sm tracking-wider text-white">AMSC Combine Data Template</p>
+                  <p className="text-secondary font-body text-xs mt-0.5">Fill this in after every session, then upload below.</p>
+                </div>
+                <a
+                  href="/AMSC_Combine_Data_Template.xlsx"
+                  download
+                  className="flex items-center gap-2 bg-accent text-white font-display font-bold text-xs tracking-wider uppercase px-4 py-2 rounded-full hover:bg-accent-dark transition-all whitespace-nowrap"
+                >
+                  ↓ Download Template
+                </a>
+              </div>
+
               <form onSubmit={handleUpload} className="bg-surface border border-white/5 rounded-lg p-6 mb-6">
                 <h2 className="font-display font-bold text-lg tracking-wider mb-6">UPLOAD COMBINE RESULTS</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
