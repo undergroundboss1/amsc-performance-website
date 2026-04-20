@@ -119,11 +119,19 @@ const heroChild = {
 export default function Home() {
   return (
     <>
-      {/* Hero Section — Centered Logo */}
-      <section className="relative min-h-screen flex items-center justify-center bg-background overflow-hidden">
-        {/* Subtle radial gradient background */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(220,38,38,0.06)_0%,_transparent_70%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom,_rgba(17,17,17,1)_0%,_transparent_50%)]" />
+      {/* Hero Section — Track Background */}
+      <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
+        {/* Background image */}
+        <div
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+          style={{ backgroundImage: "url('/images/hero-track.jpg')" }}
+        />
+
+        {/* Dark overlay — heavier at top and bottom, lighter in center to keep athlete visible */}
+        <div className="absolute inset-0 bg-black/60" />
+        <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-background/80" />
+        {/* Subtle red vignette */}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(196,30,58,0.08)_0%,_transparent_70%)]" />
 
         <motion.div
           className="relative z-10 text-center px-6"
@@ -137,13 +145,13 @@ export default function Home() {
               alt="AMSC Performance"
               width={500}
               height={200}
-              className="mx-auto w-[280px] md:w-[420px] lg:w-[500px] h-auto mb-8"
+              className="mx-auto w-[260px] md:w-[380px] lg:w-[460px] h-auto mb-8 drop-shadow-2xl"
               priority
             />
           </motion.div>
 
           <motion.h1
-            className="font-display text-white/40 text-sm md:text-base tracking-[0.3em] uppercase mb-12"
+            className="font-display text-white/60 text-sm md:text-base tracking-[0.3em] uppercase mb-12 drop-shadow-lg"
             variants={heroChild}
           >
             Engineered Athlete Development
@@ -161,15 +169,15 @@ export default function Home() {
             </Link>
             <Link
               href="/programs"
-              className="border border-white/15 text-white/80 px-10 py-4 rounded-full font-display text-sm font-bold tracking-wider uppercase hover:bg-white/5 hover:border-white/25 hover:text-white transition-all duration-200 text-center"
+              className="border border-white/25 text-white/90 px-10 py-4 rounded-full font-display text-sm font-bold tracking-wider uppercase hover:bg-white/10 hover:border-white/40 hover:text-white transition-all duration-200 text-center backdrop-blur-sm"
             >
               Explore Programs
             </Link>
           </motion.div>
         </motion.div>
 
-        {/* Bottom gradient fade */}
-        <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-background to-transparent" />
+        {/* Bottom gradient fade into next section */}
+        <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-background to-transparent" />
       </section>
 
       {/* Stats Bar */}
