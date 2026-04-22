@@ -58,30 +58,50 @@ export default function PhilosophyPage() {
       </section>
 
       {/* Philosophy Statements */}
-      <section className="py-32 px-6 bg-surface">
-        <AnimatedSection>
-          <div className="max-w-3xl mx-auto text-center space-y-10">
-            <div>
-              <p className="font-display text-2xl md:text-3xl font-bold tracking-widest">
-                WE DON&apos;T CHASE INTENSITY.
-              </p>
-              <p className="font-display text-2xl md:text-3xl font-bold tracking-widest">
-                WE BUILD CAPACITY.
+      <section className="bg-surface overflow-hidden">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2">
+
+          {/* Text side */}
+          <AnimatedSection className="flex flex-col justify-center px-8 md:px-16 py-24 md:py-32">
+            <div className="space-y-10">
+              <div className="space-y-1">
+                <p className="font-display text-2xl md:text-3xl font-bold tracking-widest">
+                  WE DON&apos;T CHASE INTENSITY.
+                </p>
+                <p className="font-display text-2xl md:text-3xl font-bold tracking-widest text-accent">
+                  WE BUILD CAPACITY.
+                </p>
+              </div>
+              <div className="w-12 h-0.5 bg-accent" />
+              <div className="space-y-1">
+                <p className="font-display text-2xl md:text-3xl font-bold tracking-widest">
+                  WE DON&apos;T GUESS.
+                </p>
+                <p className="font-display text-2xl md:text-3xl font-bold tracking-widest text-accent">
+                  WE ASSESS, DEVELOP, AND TRANSFER.
+                </p>
+              </div>
+              <p className="text-secondary text-base leading-relaxed font-body max-w-md">
+                Because long-term performance isn&apos;t built in moments — it&apos;s built through systems.
               </p>
             </div>
-            <div>
-              <p className="font-display text-2xl md:text-3xl font-bold tracking-widest">
-                WE DON&apos;T GUESS.
-              </p>
-              <p className="font-display text-2xl md:text-3xl font-bold tracking-widest">
-                WE ASSESS, DEVELOP, AND TRANSFER.
-              </p>
-            </div>
-            <p className="text-secondary text-base leading-relaxed font-body">
-              Because long-term performance isn&apos;t built in moments — it&apos;s built through systems.
-            </p>
+          </AnimatedSection>
+
+          {/* Image side */}
+          <div className="relative min-h-[500px] md:min-h-0">
+            <Image
+              src="/images/philosophy-coaching.jpg"
+              alt="AMSC coach reviewing athlete data on track"
+              fill
+              className="object-cover"
+              style={{ objectPosition: 'center 20%' }}
+              sizes="(max-width: 768px) 100vw, 50vw"
+            />
+            {/* Left fade to blend with text side */}
+            <div className="absolute inset-0 bg-gradient-to-r from-surface via-transparent to-transparent md:block hidden" />
           </div>
-        </AnimatedSection>
+
+        </div>
       </section>
 
       {/* The AMSC Development System */}
