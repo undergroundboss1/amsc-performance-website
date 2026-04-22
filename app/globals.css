@@ -63,22 +63,24 @@ a.btn:active,
 
 /* Card hover animations */
 .card {
-  transition: transform 0.35s cubic-bezier(0.25, 0.1, 0.25, 1), box-shadow 0.35s;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.3s;
   overflow: hidden;
   cursor: pointer;
 }
 
 .card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  transform: translateY(-5px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(220, 38, 38, 0.08);
 }
 
 .card img {
-  transition: transform 0.6s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .card:hover img {
-  transform: scale(1.05);
+  transform: scale(1.06);
 }
 
 /* Nav link animations */
@@ -150,9 +152,48 @@ button:focus-visible {
 
 /* Glow effect utility */
 .glow-red {
-  text-shadow: 0 0 40px rgba(220, 38, 38, 0.3);
+  text-shadow: 0 0 40px rgba(220, 38, 38, 0.35);
 }
 
 .glow-gold {
   text-shadow: 0 0 40px rgba(202, 138, 4, 0.3);
+}
+
+/* Accent button lift */
+a[href],
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Subtle shimmer on section dividers */
+.section-title::before {
+  animation: shimmer-bar 3s ease-in-out infinite alternate;
+}
+
+@keyframes shimmer-bar {
+  from { opacity: 0.7; width: 48px; }
+  to   { opacity: 1;   width: 56px; }
+}
+
+/* Smooth image placeholder fade-in */
+img {
+  transition: opacity 0.4s ease;
+}
+
+/* Hover underline utility */
+.hover-underline {
+  position: relative;
+}
+.hover-underline::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 0;
+  height: 1px;
+  background: var(--accent);
+  transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.hover-underline:hover::after {
+  width: 100%;
 }

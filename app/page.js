@@ -1,10 +1,18 @@
 'use client';
+import { useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
+import { gsap } from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { useGSAP } from '@gsap/react';
 import AnimatedSection from '../components/AnimatedSection';
+import ScrollReveal from '../components/ScrollReveal';
+import TextReveal from '../components/TextReveal';
 import CountUp from '../components/CountUp';
 import InstagramFeed from '../components/InstagramFeed';
+
+gsap.registerPlugin(ScrollTrigger, useGSAP);
 
 const athletes = [
   { name: 'Angela Wachira', desc: 'Midfielder · Mulligan Division 1 NCAA Soccer', image: '/images/athlete-angela.jpg' },
@@ -36,7 +44,7 @@ const systemCards = [
     step: '03',
     title: 'TRANSFER',
     subtitle: 'Data guides decisions.',
-    desc: 'Speed metrics. Workload control. Objective benchmarks. If it doesn\'t transfer to sport, it doesn\'t matter.',
+    desc: "Speed metrics. Workload control. Objective benchmarks. If it doesn't transfer to sport, it doesn't matter.",
     image: '/images/system-transfer.jpg',
   },
 ];
@@ -106,31 +114,53 @@ const programs = [
 
 const heroStagger = {
   hidden: {},
-  visible: {
-    transition: { staggerChildren: 0.2, delayChildren: 0.3 },
-  },
+  visible: { transition: { staggerChildren: 0.18, delayChildren: 0.25 } },
 };
 
 const heroChild = {
-  hidden: { opacity: 0, y: 30 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: [0.25, 0.1, 0.25, 1] } },
+  hidden: { opacity: 0, y: 24 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.9, ease: [0.16, 1, 0.3, 1] } },
 };
 
 export default function Home() {
+  const heroRef = useRef(null);
+  const heroBgRef = useRef(null);
+  const shouldReduceMotion = useReducedMotion();
+
+  // Parallax: hero background drifts up slowly on scroll
+  useGSAP(
+    () => {
+      if (shouldReduceMotion) return;
+      gsap.to(heroBgRef.current, {
+        yPercent: 12,
+        ease: 'none',
+        scrollTrigger: {
+          trigger: heroRef.current,
+          start: 'top top',
+          end: 'bottom top',
+          scrub: 1,
+        },
+      });
+    },
+    { scope: heroRef }
+  );
+
   return (
     <>
-      {/* Hero Section — Track Background */}
-      <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
-        {/* Background image */}
+      {/* ── Hero ── */}
+      <section
+        ref={heroRef}
+        className="relative min-h-screen flex items-center justify-center overflow-hidden"
+      >
+        {/* Background image — parallaxed. Extra bleed top/bottom only so horizontal crop stays identical to original. */}
         <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+          ref={heroBgRef}
+          className="absolute inset-x-0 -top-[8%] -bottom-[8%] bg-cover bg-center bg-no-repeat will-change-transform"
           style={{ backgroundImage: "url('/images/hero-track.jpg')" }}
         />
 
-        {/* Dark overlay — heavier at top and bottom, lighter in center to keep athlete visible */}
         <div className="absolute inset-0 bg-black/60" />
         <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-background/80" />
-        {/* Subtle red vignette */}
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(196,30,58,0.08)_0%,_transparent_70%)]" />
 
         <motion.div
@@ -163,24 +193,38 @@ export default function Home() {
           >
             <Link
               href="/join"
-              className="bg-accent text-white px-10 py-4 rounded-full font-display text-sm font-bold tracking-wider uppercase hover:bg-accent-dark transition-all duration-200 hover:shadow-lg hover:shadow-red-900/30 text-center"
+              className="bg-accent text-white px-10 py-4 rounded-full font-display text-sm font-bold tracking-wider uppercase hover:bg-accent-dark transition-all duration-200 hover:shadow-lg hover:shadow-red-900/30 hover:-translate-y-0.5 text-center"
             >
               Join AMSC
             </Link>
             <Link
               href="/programs"
-              className="border border-white/25 text-white/90 px-10 py-4 rounded-full font-display text-sm font-bold tracking-wider uppercase hover:bg-white/10 hover:border-white/40 hover:text-white transition-all duration-200 text-center backdrop-blur-sm"
+              className="border border-white/25 text-white/90 px-10 py-4 rounded-full font-display text-sm font-bold tracking-wider uppercase hover:bg-white/10 hover:border-white/40 hover:text-white transition-all duration-200 hover:-translate-y-0.5 text-center backdrop-blur-sm"
             >
               Explore Programs
             </Link>
           </motion.div>
         </motion.div>
 
-        {/* Bottom gradient fade into next section */}
+        {/* Scroll cue */}
+        <motion.div
+          className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1.8, duration: 0.8 }}
+          aria-hidden="true"
+        >
+          <motion.div
+            className="w-[1px] h-10 bg-gradient-to-b from-white/40 to-transparent"
+            animate={{ scaleY: [0, 1, 0], originY: 0 }}
+            transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut', delay: 2 }}
+          />
+        </motion.div>
+
         <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-background to-transparent" />
       </section>
 
-      {/* Stats Bar */}
+      {/* ── Stats Bar ── */}
       <section className="bg-surface py-20 px-6 border-t border-white/5">
         <div className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-10 text-center">
           {stats.map((stat, i) => (
@@ -198,92 +242,96 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Trusted By Elite Athletes */}
+      {/* ── Trusted By Elite Athletes ── */}
       <section className="bg-background text-white py-32 px-6">
         <AnimatedSection>
-          <div className="max-w-7xl mx-auto text-center">
-            <h2 className="section-title font-display font-black text-3xl md:text-5xl tracking-widest mb-4">
-              TRUSTED BY ELITE ATHLETES
-            </h2>
-            <p className="text-secondary text-base max-w-2xl mx-auto mb-20 font-body">
-              Athletes trained at AMSC compete at the highest levels across multiple sports.
-            </p>
+          <div className="max-w-7xl mx-auto text-center mb-5">
+            <TextReveal
+              text="TRUSTED BY ELITE ATHLETES"
+              className="section-title font-display font-black text-3xl md:text-5xl tracking-widest mb-4"
+            />
           </div>
+        </AnimatedSection>
+        <AnimatedSection delay={0.1}>
+          <p className="text-secondary text-base max-w-2xl mx-auto mb-20 font-body text-center">
+            Athletes trained at AMSC compete at the highest levels across multiple sports.
+          </p>
         </AnimatedSection>
 
         <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-1">
-            {athletes.map((athlete, i) => (
-              <AnimatedSection key={athlete.name} delay={i * 0.08}>
-                <div className="card group bg-surface-light relative">
-                  <div className="aspect-[3/4] overflow-hidden relative">
-                    <Image
-                      src={athlete.image}
-                      alt={athlete.name}
-                      fill
-                      sizes="(max-width: 768px) 50vw, 25vw"
-                      className="object-cover grayscale group-hover:grayscale-0 transition-all duration-700"
-                    />
-                    {/* Hover overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                  </div>
-                  <div className="p-4">
-                    <h3 className="font-display font-bold text-sm tracking-wider">{athlete.name}</h3>
-                    <p className="text-secondary text-xs mt-1 leading-relaxed font-body">{athlete.desc}</p>
+          <ScrollReveal className="grid grid-cols-2 md:grid-cols-4 gap-1" stagger={0.07}>
+            {athletes.map((athlete) => (
+              <div key={athlete.name} className="sr-item card group bg-surface-light relative">
+                <div className="aspect-[3/4] overflow-hidden relative">
+                  <Image
+                    src={athlete.image}
+                    alt={athlete.name}
+                    fill
+                    sizes="(max-width: 768px) 50vw, 25vw"
+                    className="object-cover grayscale group-hover:grayscale-0 transition-all duration-700 group-hover:scale-105"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                  {/* Name reveal on hover */}
+                  <div className="absolute bottom-0 left-0 right-0 p-4 translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-400">
+                    <p className="font-display font-bold text-xs tracking-wider text-white">{athlete.name}</p>
                   </div>
                 </div>
-              </AnimatedSection>
+                <div className="p-4">
+                  <h3 className="font-display font-bold text-sm tracking-wider">{athlete.name}</h3>
+                  <p className="text-secondary text-xs mt-1 leading-relaxed font-body">{athlete.desc}</p>
+                </div>
+              </div>
             ))}
-          </div>
+          </ScrollReveal>
         </div>
       </section>
 
-      {/* THE SYSTEM */}
+      {/* ── The System ── */}
       <section className="py-32 px-6 bg-surface">
         <AnimatedSection>
           <div className="max-w-7xl mx-auto text-center mb-20">
-            <h2 className="section-title font-display font-black text-3xl md:text-5xl tracking-widest mb-4">
-              THE SYSTEM
-            </h2>
+            <TextReveal
+              text="THE SYSTEM"
+              className="section-title font-display font-black text-3xl md:text-5xl tracking-widest mb-4"
+            />
             <p className="text-secondary text-base max-w-2xl mx-auto font-body">
               A performance system built around the individual athlete.
             </p>
           </div>
         </AnimatedSection>
 
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
-          {systemCards.map((card, i) => (
-            <AnimatedSection key={card.title} delay={i * 0.15}>
-              <div className="card bg-surface-light border border-white/5 rounded-lg overflow-hidden group">
-                <div className="aspect-[4/3] overflow-hidden relative">
-                  <Image
-                    src={card.image}
-                    alt={card.title}
-                    fill
-                    sizes="(max-width: 768px) 100vw, 33vw"
-                    className="object-cover"
-                  />
-                  <div className="absolute inset-0 bg-black/30 group-hover:bg-black/10 transition-all duration-500" />
-                  <div className="absolute top-4 left-4">
-                    <span className="bg-accent text-white font-display text-xs font-bold tracking-widest px-3 py-1 rounded">
-                      {card.step}
-                    </span>
-                  </div>
-                </div>
-                <div className="p-8 text-center">
-                  <h3 className="font-display font-black text-2xl tracking-widest mb-2">
-                    {card.title}
-                  </h3>
-                  <p className="text-accent font-display font-semibold text-sm mb-3 tracking-wide">{card.subtitle}</p>
-                  <p className="text-secondary text-sm leading-relaxed font-body">{card.desc}</p>
+        <ScrollReveal className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6" stagger={0.15}>
+          {systemCards.map((card) => (
+            <div
+              key={card.title}
+              className="sr-item card bg-surface-light border border-white/5 rounded-lg overflow-hidden group"
+            >
+              <div className="aspect-[4/3] overflow-hidden relative">
+                <Image
+                  src={card.image}
+                  alt={card.title}
+                  fill
+                  sizes="(max-width: 768px) 100vw, 33vw"
+                  className="object-cover group-hover:scale-105 transition-transform duration-700"
+                />
+                <div className="absolute inset-0 bg-black/30 group-hover:bg-black/10 transition-all duration-500" />
+                <div className="absolute top-4 left-4">
+                  <span className="bg-accent text-white font-display text-xs font-bold tracking-widest px-3 py-1 rounded">
+                    {card.step}
+                  </span>
                 </div>
               </div>
-            </AnimatedSection>
+              <div className="p-8 text-center">
+                <h3 className="font-display font-black text-2xl tracking-widest mb-2">{card.title}</h3>
+                <p className="text-accent font-display font-semibold text-sm mb-3 tracking-wide">{card.subtitle}</p>
+                <p className="text-secondary text-sm leading-relaxed font-body">{card.desc}</p>
+              </div>
+            </div>
           ))}
-        </div>
+        </ScrollReveal>
       </section>
 
-      {/* Training Philosophy Banner */}
+      {/* ── Training Philosophy Banner ── */}
       <section className="relative py-40 px-6 overflow-hidden">
         <div
           className="absolute inset-0 bg-cover bg-center"
@@ -292,15 +340,16 @@ export default function Home() {
         <div className="absolute inset-0 bg-black/70" />
         <AnimatedSection>
           <div className="relative max-w-3xl mx-auto text-center text-white">
-            <h2 className="font-display font-black text-3xl md:text-5xl tracking-widest mb-8">
-              TRAINING PHILOSOPHY
-            </h2>
+            <TextReveal
+              text="TRAINING PHILOSOPHY"
+              className="font-display font-black text-3xl md:text-5xl tracking-widest mb-8"
+            />
             <p className="text-white/60 text-base leading-relaxed mb-12 max-w-2xl mx-auto font-body">
               At AMSC, we believe performance is built through patience, precision, and purpose. Every session, every rep, every phase of training is designed to move you closer to your potential — not just for the next competition, but for the long term.
             </p>
             <Link
               href="/philosophy"
-              className="inline-block bg-accent text-white px-10 py-4 rounded-full font-display text-sm font-bold tracking-wider uppercase hover:bg-accent-dark transition-all duration-200 hover:shadow-lg hover:shadow-red-900/30"
+              className="inline-block bg-accent text-white px-10 py-4 rounded-full font-display text-sm font-bold tracking-wider uppercase hover:bg-accent-dark transition-all duration-200 hover:shadow-lg hover:shadow-red-900/30 hover:-translate-y-0.5"
             >
               Our Training Philosophy
             </Link>
@@ -308,16 +357,17 @@ export default function Home() {
         </AnimatedSection>
       </section>
 
-      {/* Instagram Feed */}
+      {/* ── Instagram Feed ── */}
       <InstagramFeed />
 
-      {/* Choose Your Training Pathway */}
+      {/* ── Choose Your Training Pathway ── */}
       <section className="py-32 px-6 bg-background">
         <AnimatedSection>
           <div className="max-w-7xl mx-auto text-center mb-20">
-            <h2 className="section-title font-display font-black text-3xl md:text-5xl tracking-widest mb-4">
-              CHOOSE YOUR TRAINING PATHWAY
-            </h2>
+            <TextReveal
+              text="CHOOSE YOUR TRAINING PATHWAY"
+              className="section-title font-display font-black text-3xl md:text-5xl tracking-widest mb-4"
+            />
             <p className="text-secondary text-base max-w-3xl mx-auto font-body">
               Every pathway operates within the AMSC Performance System. The difference is the level of coaching access, oversight, and progression control.
             </p>
@@ -439,7 +489,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Ready to Elevate CTA */}
+      {/* ── Ready to Elevate CTA ── */}
       <section className="relative py-40 px-6 overflow-hidden">
         <div
           className="absolute inset-0 bg-cover bg-center"
@@ -448,15 +498,16 @@ export default function Home() {
         <div className="absolute inset-0 bg-black/70" />
         <AnimatedSection>
           <div className="relative max-w-3xl mx-auto text-center text-white">
-            <h2 className="font-display font-black text-3xl md:text-5xl tracking-widest mb-8">
-              READY TO ELEVATE YOUR PERFORMANCE?
-            </h2>
+            <TextReveal
+              text="READY TO ELEVATE YOUR PERFORMANCE?"
+              className="font-display font-black text-3xl md:text-5xl tracking-widest mb-8"
+            />
             <p className="text-white/60 text-base leading-relaxed mb-12 max-w-2xl mx-auto font-body">
               Whether you are preparing for competition, rebuilding after injury, or laying the foundation for long-term success — AMSC provides the structure, clarity, and support required to move forward with purpose.
             </p>
             <Link
               href="/join"
-              className="inline-block bg-accent text-white px-10 py-4 rounded-full font-display text-sm font-bold tracking-wider uppercase hover:bg-accent-dark transition-all duration-200 hover:shadow-lg hover:shadow-red-900/30"
+              className="inline-block bg-accent text-white px-10 py-4 rounded-full font-display text-sm font-bold tracking-wider uppercase hover:bg-accent-dark transition-all duration-200 hover:shadow-lg hover:shadow-red-900/30 hover:-translate-y-0.5"
             >
               Join AMSC
             </Link>

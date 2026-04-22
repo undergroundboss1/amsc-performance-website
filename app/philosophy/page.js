@@ -2,6 +2,8 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import AnimatedSection from '../../components/AnimatedSection';
+import ScrollReveal from '../../components/ScrollReveal';
+import TextReveal from '../../components/TextReveal';
 
 const pillars = [
   {
@@ -108,54 +110,53 @@ export default function PhilosophyPage() {
       <section className="py-32 px-6 bg-background">
         <AnimatedSection>
           <div className="max-w-7xl mx-auto text-center mb-20">
-            <h2 className="section-title font-display font-black text-3xl md:text-5xl tracking-widest mb-4">
-              THE AMSC DEVELOPMENT SYSTEM
-            </h2>
+            <TextReveal
+              text="THE AMSC DEVELOPMENT SYSTEM"
+              className="section-title font-display font-black text-3xl md:text-5xl tracking-widest mb-4"
+            />
             <p className="text-secondary text-base max-w-3xl mx-auto font-body">
               Every athlete progresses through a structured system designed to build and transfer performance.
             </p>
           </div>
         </AnimatedSection>
 
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
-          {pillars.map((pillar, i) => (
-            <AnimatedSection key={pillar.number} delay={i * 0.15}>
-              <div className="card bg-surface-light border border-white/5 rounded-lg h-full overflow-hidden">
-                <div className="aspect-[5/4] overflow-hidden relative">
-                  <Image
-                    src={pillar.image}
-                    alt={pillar.title}
-                    fill
-                    sizes="(max-width: 768px) 100vw, 33vw"
-                    className="object-cover"
-                  />
-                  <div className="absolute inset-0 bg-black/20" />
-                  <div className="absolute top-4 left-4">
-                    <span className="bg-accent text-white font-display text-xs font-bold tracking-widest px-3 py-1 rounded">
-                      {pillar.number}
-                    </span>
-                  </div>
-                </div>
-                <div className="p-8">
-                  <h3 className="font-display font-black text-2xl tracking-widest mb-3">
-                    {pillar.title}
-                  </h3>
-                  <p className="text-secondary text-sm leading-relaxed mb-4 font-body">{pillar.desc}</p>
-                  <ul className="space-y-2 mb-6">
-                    {pillar.items.map((item) => (
-                      <li key={item} className="flex items-center gap-2 text-secondary text-sm font-body">
-                        <span className="text-accent font-bold">—</span> {item}
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="border-t border-white/10 pt-4">
-                    <p className="text-white/80 font-semibold text-sm italic font-body">{pillar.quote}</p>
-                  </div>
+        <ScrollReveal className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6" stagger={0.15}>
+          {pillars.map((pillar) => (
+            <div key={pillar.number} className="sr-item card bg-surface-light border border-white/5 rounded-lg h-full overflow-hidden">
+              <div className="aspect-[5/4] overflow-hidden relative">
+                <Image
+                  src={pillar.image}
+                  alt={pillar.title}
+                  fill
+                  sizes="(max-width: 768px) 100vw, 33vw"
+                  className="object-cover group-hover:scale-105 transition-transform duration-700"
+                />
+                <div className="absolute inset-0 bg-black/20" />
+                <div className="absolute top-4 left-4">
+                  <span className="bg-accent text-white font-display text-xs font-bold tracking-widest px-3 py-1 rounded">
+                    {pillar.number}
+                  </span>
                 </div>
               </div>
-            </AnimatedSection>
+              <div className="p-8">
+                <h3 className="font-display font-black text-2xl tracking-widest mb-3">
+                  {pillar.title}
+                </h3>
+                <p className="text-secondary text-sm leading-relaxed mb-4 font-body">{pillar.desc}</p>
+                <ul className="space-y-2 mb-6">
+                  {pillar.items.map((item) => (
+                    <li key={item} className="flex items-center gap-2 text-secondary text-sm font-body">
+                      <span className="text-accent font-bold">—</span> {item}
+                    </li>
+                  ))}
+                </ul>
+                <div className="border-t border-white/10 pt-4">
+                  <p className="text-white/80 font-semibold text-sm italic font-body">{pillar.quote}</p>
+                </div>
+              </div>
+            </div>
           ))}
-        </div>
+        </ScrollReveal>
       </section>
 
       {/* Engineered Performance Outcomes */}

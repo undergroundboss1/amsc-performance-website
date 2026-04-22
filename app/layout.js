@@ -4,6 +4,7 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import CookieConsent from "../components/CookieConsent";
 import { ConsentProvider } from "../components/ConsentContext";
+import ScrollProgressBar from "../components/ScrollProgressBar";
 
 const barlow = Barlow({
   subsets: ["latin"],
@@ -117,6 +118,7 @@ export default function RootLayout({ children }) {
           >
             Skip to content
           </a>
+          <ScrollProgressBar />
           <Navbar />
           <main id="main-content">
             {children}
