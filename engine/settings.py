@@ -89,3 +89,32 @@ SPEED_MAINTENANCE = {
     "efficient_max_delta":  0.15,
     "moderate_max_delta":   0.35,
 }
+
+# ── RSI thresholds ─────────────────────────────────────────────
+# Reactive Strength Index = Jump Height (m) / Ground Contact Time (s)
+# Higher is better — same structure as jump thresholds (min = lower bound)
+
+RSI_DOUBLE = {
+    "male": {
+        "advanced":    {"min": 2.60},
+        "competitive": {"min": 2.00, "max": 2.60},
+    },
+    "female": {
+        "advanced":    {"min": 2.20},
+        "competitive": {"min": 1.60, "max": 2.20},
+    },
+}
+
+RSI_SINGLE = {
+    "male": {
+        "advanced":    {"min": 2.00},
+        "competitive": {"min": 1.50, "max": 2.00},
+    },
+    "female": {
+        "advanced":    {"min": 1.70},
+        "competitive": {"min": 1.20, "max": 1.70},
+    },
+}
+
+# Flag bilateral asymmetry if left/right difference exceeds this percentage
+RSI_ASYMMETRY_THRESHOLD = 0.10   # 10% — widely used in sports science literature

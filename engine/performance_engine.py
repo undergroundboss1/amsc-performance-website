@@ -20,6 +20,9 @@ from engine.settings import (
     CMJ,
     BROAD_JUMP,
     SPEED_MAINTENANCE,
+    RSI_DOUBLE,
+    RSI_SINGLE,
+    RSI_ASYMMETRY_THRESHOLD,
 )
 
 Gender = Literal["male", "female"]
@@ -262,16 +265,79 @@ def classify_broad_jump(gender: Gender, broad_cm: Optional[float]) -> Optional[T
     return _classify_distance(gender, broad_cm, BROAD_JUMP)
 
 
+# ── RSI classifiers ───────────────────────────────────────────
+
+def classify_rsi_double(gender: Gender, rsi_avg: Optional[float]) -> Optional[Tier]:
+    """Classify double-leg RSI. Returns None if data not available."""
+    if rsi_avg is None:
+        return None
+    return _classify_distance(gender, rsi_avg, RSI_DOUBLE)
+
+
+def classify_rsi_single(gender: Gender, rsi_avg: Optional[float]) -> Optional[Tier]:
+    """Classify single-leg RSI. Returns None if data not available."""
+    if rsi_avg is None:
+        return None
+    return _classify_distance(gender, rsi_avg, RSI_SINGLE)
+
+
+def compute_rsi_asymmetry(
+    left_avg:  Optional[float],
+    right_avg: Optional[float],
+) -> Optional[dict]:
+    """
+    Compute bilateral asymmetry between left and right single-leg RSI.
+    Returns None if either leg's data is missing.
+    Returns dict with asymmetry_pct, dominant_side, and flagged (True if >10%).
+    """
+    if left_avg is None or right_avg is None:
+        return None
+    higher = max(left_avg, right_avg)
+    lower  = min(left_avg, right_avg)
+    if higher == 0:
+        return None
+    asymmetry_pct = round(((higher - lower) / higher) * 100, 1)
+    dominant_side = "Left" if left_avg > right_avg else "Right"
+    flagged       = asymmetry_pct > (RSI_ASYMMETRY_THRESHOLD * 100)
+    return {
+        "asymmetry_pct": asymmetry_pct,
+        "dominant_side": dominant_side,
+        "flagged":       flagged,
+    }
+
+
+def detect_power_profile_type(
+    cmj_cat:        Optional[Tier],
+    rsi_double_cat: Optional[Tier],
+) -> Optional[str]:
+    """
+    Compare concentric power (CMJ) vs reactive power (RSI) to classify
+    the athlete's power profile type.
+    Returns None if either metric is missing.
+    """
+    if cmj_cat is None or rsi_double_cat is None:
+        return None
+    tier_rank = {Tier.DEVELOPING: 1, Tier.COMPETITIVE: 2, Tier.ADVANCED: 3}
+    cmj_rank = tier_rank[cmj_cat]
+    rsi_rank = tier_rank[rsi_double_cat]
+    if rsi_rank > cmj_rank:
+        return "Reactive-Dominant"
+    if cmj_rank > rsi_rank:
+        return "Strength-Dominant"
+    return "Balanced Power Profile"
+
+
 # ── Power classification ───────────────────────────────────────
 
 def classify_power(
-    cmj_cat:   Optional[Tier],
-    broad_cat: Optional[Tier],
+    cmj_cat:        Optional[Tier],
+    broad_cat:      Optional[Tier],
+    rsi_double_cat: Optional[Tier] = None,
 ) -> Dict[str, Optional[str]]:
-    if cmj_cat is None and broad_cat is None:
+    if cmj_cat is None and broad_cat is None and rsi_double_cat is None:
         return {"power_category": None, "power_level": None}
 
-    cats = [c.value for c in [cmj_cat, broad_cat] if c is not None]
+    cats = [c.value for c in [cmj_cat, broad_cat, rsi_double_cat] if c is not None]
     if "Advanced" in cats:
         return {"power_category": "Advanced", "power_level": "Strong"}
     elif "Competitive" in cats:
@@ -282,11 +348,13 @@ def classify_power(
 # ── Imbalance detection ────────────────────────────────────────
 
 def detect_primary_imbalance(
-    accel_cat:       Tier,
-    max_vel_cat:     Tier,
-    speed_maint_cat: Optional[SpeedMaintenance],
-    cmj_cat:         Optional[Tier],
-    broad_cat:       Optional[Tier],
+    accel_cat:          Tier,
+    max_vel_cat:        Tier,
+    speed_maint_cat:    Optional[SpeedMaintenance],
+    cmj_cat:            Optional[Tier],
+    broad_cat:          Optional[Tier],
+    rsi_asymmetry:      Optional[dict] = None,
+    power_profile_type: Optional[str]  = None,
 ) -> str:
     strong_accel = accel_cat   == Tier.ADVANCED
     weak_accel   = accel_cat   == Tier.DEVELOPING
@@ -307,6 +375,15 @@ def detect_primary_imbalance(
         return "Strong Power / Weak Speed Transfer"
     if weak_power and weak_accel and weak_maxv:
         return "Underdeveloped Power & Speed"
+
+    # RSI-informed imbalances (only fire if RSI data was collected)
+    if rsi_asymmetry and rsi_asymmetry["flagged"]:
+        return (f"Bilateral Asymmetry — {rsi_asymmetry['dominant_side']} Dominant "
+                f"({rsi_asymmetry['asymmetry_pct']}%)")
+    if power_profile_type == "Strength-Dominant" and (strong_accel or strong_maxv):
+        return "Strong Speed & Strength / Weak Reactive Ability"
+    if power_profile_type == "Reactive-Dominant" and weak_power:
+        return "Good Reactive Ability / Weak Concentric Power"
     return "Balanced Profile"
 
 
@@ -325,6 +402,16 @@ def evaluate_athlete(
     fly10:       float = 0.0,
     cmj_cm:      Optional[float] = None,
     broad_cm:    Optional[float] = None,
+    # RSI — all optional; if None the metric is skipped
+    rsi_double_avg:          Optional[float] = None,
+    rsi_double_best:         Optional[float] = None,
+    rsi_double_gct_avg:      Optional[float] = None,
+    rsi_single_left_avg:     Optional[float] = None,
+    rsi_single_left_best:    Optional[float] = None,
+    rsi_single_left_gct_avg: Optional[float] = None,
+    rsi_single_right_avg:    Optional[float] = None,
+    rsi_single_right_best:   Optional[float] = None,
+    rsi_single_right_gct_avg: Optional[float] = None,
 ) -> Dict[str, Any]:
 
     validation_errors = validate_inputs(
@@ -344,9 +431,18 @@ def evaluate_athlete(
     speed_maint_cat = classify_speed_maintenance(segs["peak_velocity_segment"], segs["80_100"])
     cmj_cat         = classify_cmj(gender, cmj_cm)
     broad_cat       = classify_broad_jump(gender, broad_cm)
-    power           = classify_power(cmj_cat, broad_cat)
-    imbalance       = detect_primary_imbalance(
-        accel_cat, maxv_cat, speed_maint_cat, cmj_cat, broad_cat
+
+    # RSI classifications
+    rsi_double_cat       = classify_rsi_double(gender, rsi_double_avg)
+    rsi_single_left_cat  = classify_rsi_single(gender, rsi_single_left_avg)
+    rsi_single_right_cat = classify_rsi_single(gender, rsi_single_right_avg)
+    rsi_asymmetry        = compute_rsi_asymmetry(rsi_single_left_avg, rsi_single_right_avg)
+    power_profile_type   = detect_power_profile_type(cmj_cat, rsi_double_cat)
+
+    power     = classify_power(cmj_cat, broad_cat, rsi_double_cat)
+    imbalance = detect_primary_imbalance(
+        accel_cat, maxv_cat, speed_maint_cat, cmj_cat, broad_cat,
+        rsi_asymmetry, power_profile_type
     )
 
     missing_fields = []
@@ -355,6 +451,9 @@ def evaluate_athlete(
     if split_0_100 is None: missing_fields.append("100m")
     if cmj_cm      is None: missing_fields.append("CMJ")
     if broad_cm    is None: missing_fields.append("Broad Jump")
+    if rsi_double_avg        is None: missing_fields.append("RSI Double")
+    if rsi_single_left_avg   is None: missing_fields.append("RSI Single-Left")
+    if rsi_single_right_avg  is None: missing_fields.append("RSI Single-Right")
 
     return {
         "name":   name,
@@ -369,6 +468,16 @@ def evaluate_athlete(
         "fly10":   fly10,
         "cmj_cm":  cmj_cm,
         "broad_cm": broad_cm,
+        # RSI raw inputs
+        "rsi_double_avg":           rsi_double_avg,
+        "rsi_double_best":          rsi_double_best,
+        "rsi_double_gct_avg":       rsi_double_gct_avg,
+        "rsi_single_left_avg":      rsi_single_left_avg,
+        "rsi_single_left_best":     rsi_single_left_best,
+        "rsi_single_left_gct_avg":  rsi_single_left_gct_avg,
+        "rsi_single_right_avg":     rsi_single_right_avg,
+        "rsi_single_right_best":    rsi_single_right_best,
+        "rsi_single_right_gct_avg": rsi_single_right_gct_avg,
         "20_40":                 segs["20_40"],
         "40_60":                 segs["40_60"],
         "60_80":                 segs["60_80"],
@@ -381,6 +490,14 @@ def evaluate_athlete(
         "speed_maintenance_category": speed_maint_cat.value if speed_maint_cat else None,
         "cmj_category":               cmj_cat.value if cmj_cat else None,
         "broad_jump_category":        broad_cat.value if broad_cat else None,
+        # RSI classifications
+        "rsi_double_category":       rsi_double_cat.value if rsi_double_cat else None,
+        "rsi_single_left_category":  rsi_single_left_cat.value if rsi_single_left_cat else None,
+        "rsi_single_right_category": rsi_single_right_cat.value if rsi_single_right_cat else None,
+        "rsi_asymmetry_pct":    rsi_asymmetry["asymmetry_pct"] if rsi_asymmetry else None,
+        "rsi_dominant_side":    rsi_asymmetry["dominant_side"] if rsi_asymmetry else None,
+        "rsi_asymmetry_flag":   rsi_asymmetry["flagged"]       if rsi_asymmetry else None,
+        "power_profile_type":   power_profile_type,
         "power_category": power["power_category"],
         "power_level":    power["power_level"],
         "primary_imbalance_flag": imbalance,
@@ -399,6 +516,10 @@ def evaluate_batch(df: pd.DataFrame) -> tuple:
     results = []
     errors  = []
 
+    def _opt(row, key):
+        val = row.get(key)
+        return float(val) if (val is not None and pd.notna(val)) else None
+
     for idx, row in df.iterrows():
         try:
             result = evaluate_athlete(
@@ -408,12 +529,21 @@ def evaluate_batch(df: pd.DataFrame) -> tuple:
                 date        = str(row.get("date", "")),
                 split_0_20  = float(row["split_0_20"]),
                 split_0_40  = float(row["split_0_40"]),
-                split_0_60  = float(row["split_0_60"])  if pd.notna(row.get("split_0_60"))  else None,
-                split_0_80  = float(row["split_0_80"])  if pd.notna(row.get("split_0_80"))  else None,
-                split_0_100 = float(row["split_0_100"]) if pd.notna(row.get("split_0_100")) else None,
+                split_0_60  = _opt(row, "split_0_60"),
+                split_0_80  = _opt(row, "split_0_80"),
+                split_0_100 = _opt(row, "split_0_100"),
                 fly10       = float(row["fly10"]),
-                cmj_cm      = float(row["cmj_cm"])   if pd.notna(row.get("cmj_cm"))   else None,
-                broad_cm    = float(row["broad_cm"]) if pd.notna(row.get("broad_cm")) else None,
+                cmj_cm      = _opt(row, "cmj_cm"),
+                broad_cm    = _opt(row, "broad_cm"),
+                rsi_double_avg           = _opt(row, "rsi_double_avg"),
+                rsi_double_best          = _opt(row, "rsi_double_best"),
+                rsi_double_gct_avg       = _opt(row, "rsi_double_gct_avg"),
+                rsi_single_left_avg      = _opt(row, "rsi_single_left_avg"),
+                rsi_single_left_best     = _opt(row, "rsi_single_left_best"),
+                rsi_single_left_gct_avg  = _opt(row, "rsi_single_left_gct_avg"),
+                rsi_single_right_avg     = _opt(row, "rsi_single_right_avg"),
+                rsi_single_right_best    = _opt(row, "rsi_single_right_best"),
+                rsi_single_right_gct_avg = _opt(row, "rsi_single_right_gct_avg"),
             )
             results.append(result)
         except Exception as e:
@@ -439,11 +569,20 @@ def batch_to_dataframe(results: List[Dict[str, Any]]) -> pd.DataFrame:
         "name", "gender", "sport", "date",
         "0_20", "0_40", "0_60", "0_80", "0_100",
         "fly10", "cmj_cm", "broad_cm",
+        # RSI raw
+        "rsi_double_avg", "rsi_double_best", "rsi_double_gct_avg",
+        "rsi_single_left_avg", "rsi_single_left_best", "rsi_single_left_gct_avg",
+        "rsi_single_right_avg", "rsi_single_right_best", "rsi_single_right_gct_avg",
         "20_40", "40_60", "60_80", "80_100",
         "peak_velocity_segment", "peak_velocity_zone",
         "acceleration_category", "max_velocity_category",
         "hundred_category", "speed_maintenance_category",
         "cmj_category", "broad_jump_category",
+        # RSI classifications
+        "rsi_double_category",
+        "rsi_single_left_category", "rsi_single_right_category",
+        "rsi_asymmetry_pct", "rsi_dominant_side", "rsi_asymmetry_flag",
+        "power_profile_type",
         "power_category", "power_level",
         "primary_imbalance_flag", "missing_fields",
     ]
@@ -454,6 +593,12 @@ def batch_to_dataframe(results: List[Dict[str, Any]]) -> pd.DataFrame:
                  "fly10","20_40","40_60","60_80","80_100",
                  "peak_velocity_segment"]
     jump_cols = ["cmj_cm", "broad_cm"]
+    rsi_cols  = [
+        "rsi_double_avg", "rsi_double_best", "rsi_double_gct_avg",
+        "rsi_single_left_avg", "rsi_single_left_best", "rsi_single_left_gct_avg",
+        "rsi_single_right_avg", "rsi_single_right_best", "rsi_single_right_gct_avg",
+        "rsi_asymmetry_pct",
+    ]
 
     for col in time_cols:
         if col in df.columns:
@@ -461,5 +606,8 @@ def batch_to_dataframe(results: List[Dict[str, Any]]) -> pd.DataFrame:
     for col in jump_cols:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce").round(0)
+    for col in rsi_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce").round(3)
 
     return df[[c for c in column_order if c in df.columns]]

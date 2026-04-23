@@ -235,6 +235,19 @@ def _transform_sprint_row(row: pd.Series) -> dict:
         "cmj_cm":      None,
         "broad_cm":    None,
 
+        # RSI fields — filled in later once the RSI sheet is merged.
+        # All None until the updated template (with Avg RSI, Avg GCT,
+        # Max RSI, Max GCT per leg) is confirmed and a reader is added.
+        "rsi_double_avg":           None,
+        "rsi_double_best":          None,
+        "rsi_double_gct_avg":       None,
+        "rsi_single_left_avg":      None,
+        "rsi_single_left_best":     None,
+        "rsi_single_left_gct_avg":  None,
+        "rsi_single_right_avg":     None,
+        "rsi_single_right_best":    None,
+        "rsi_single_right_gct_avg": None,
+
         "_warnings": warnings,
     }
 
