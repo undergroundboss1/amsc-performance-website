@@ -13,6 +13,7 @@ import os
 import sys
 import io
 import json
+import math
 import base64
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler
@@ -22,6 +23,17 @@ os.environ.setdefault("AMSC_ENGINE_MODE", "serverless")
 
 from engine.transform_raw_data import process_template
 from engine.performance_engine import evaluate_batch
+
+
+def _sanitize(obj):
+    """Recursively convert NaN/Infinity floats to None so json.dumps produces valid JSON."""
+    if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
+        return None
+    if isinstance(obj, dict):
+        return {k: _sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize(v) for v in obj]
+    return obj
 
 
 class handler(BaseHTTPRequestHandler):
@@ -50,14 +62,14 @@ class handler(BaseHTTPRequestHandler):
             for r in results:
                 r["date"] = event_date
 
-            response = json.dumps({
+            response = json.dumps(_sanitize({
                 "results": results,
                 "warnings": warnings,
                 "errors": [
                     {"name": e["name"], "error": e["error"]}
                     for e in errors
                 ],
-            }).encode()
+            })).encode()
 
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
