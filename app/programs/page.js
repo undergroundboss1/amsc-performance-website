@@ -29,7 +29,7 @@ const programs = [
     desc: 'Structured performance programming for athletes and driven individuals training remotely.',
     price: 'Ksh 12,000',
     image: '/images/program-online.jpg',
-    imagePosition: 'object-center',
+    imagePosition: 'object-[center_25%]',
   },
   {
     slug: 'youth',
