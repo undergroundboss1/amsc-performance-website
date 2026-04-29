@@ -46,6 +46,7 @@ const systemCards = [
     subtitle: 'Data guides decisions.',
     desc: "Speed metrics. Workload control. Objective benchmarks. If it doesn't transfer to sport, it doesn't matter.",
     image: '/images/system-transfer.jpg',
+    imagePosition: 'object-[center_65%]',
   },
 ];
 
@@ -312,7 +313,7 @@ export default function Home() {
                   alt={card.title}
                   fill
                   sizes="(max-width: 768px) 100vw, 33vw"
-                  className="object-cover group-hover:scale-105 transition-transform duration-700"
+                  className={`object-cover ${card.imagePosition || 'object-center'} group-hover:scale-105 transition-transform duration-700`}
                 />
                 <div className="absolute inset-0 bg-black/30 group-hover:bg-black/10 transition-all duration-500" />
                 <div className="absolute top-4 left-4">
@@ -493,7 +494,7 @@ export default function Home() {
       <section className="relative py-40 px-6 overflow-hidden">
         <div
           className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: "url('/images/philosophy-banner.jpg')" }}
+          style={{ backgroundImage: "url('/images/simani-backside-accel.jpg')" }}
         />
         <div className="absolute inset-0 bg-black/70" />
         <AnimatedSection>

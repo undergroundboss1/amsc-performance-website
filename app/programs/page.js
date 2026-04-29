@@ -29,7 +29,7 @@ const programs = [
     desc: 'Structured performance programming for athletes and driven individuals training remotely.',
     price: 'Ksh 12,000',
     image: '/images/program-online.jpg',
-    imagePosition: 'object-top',
+    imagePosition: 'object-center',
   },
   {
     slug: 'youth',
@@ -37,8 +37,8 @@ const programs = [
     name: 'Youth Athletic Development',
     desc: 'Building athletic foundations for young athletes aged 10–17.',
     price: 'Ksh 10,000',
-    image: '/images/program-youth.jpg',
-    imagePosition: 'object-top',
+    image: '/images/youth-athlete-lunge.jpg',
+    imagePosition: 'object-center',
   },
   {
     slug: 'consulting',
