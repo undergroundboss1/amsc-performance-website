@@ -6,25 +6,27 @@ import { getSupabase } from '../../../../lib/supabase';
 /**
  * POST /api/webhooks/paystack
  *
- * Handles Paystack webhook notifications for payment confirmation.
+ * Handles Paystack webhook notifications.
+ *
+ * Events handled:
+ *   charge.success        — First charge / monthly renewal confirmed → mark paid
+ *   invoice.payment_failed — Monthly renewal failed → mark overdue
+ *   subscription.disable  — Subscription cancelled → mark cancelled
  *
  * SECURITY:
  * - Verifies HMAC-SHA512 signature using Paystack secret key
- * - Only processes 'charge.success' events
  * - Idempotent — safe to receive duplicate webhooks
  * - Never trusts client-side payment confirmation
  *
- * Paystack sends webhooks to this URL after a payment completes.
- * Configure this URL in: Paystack Dashboard → Settings → API Keys & Webhooks
- * Webhook URL: https://your-domain.com/api/webhooks/paystack
+ * Configure in: Paystack Dashboard → Settings → API Keys & Webhooks
+ * Webhook URL: https://amscperformance.com/api/webhooks/paystack
+ * Events: Collections (charge.success)
  */
 export async function POST(request) {
   try {
-    // Read raw body for signature verification
     const rawBody = await request.text();
     const signature = request.headers.get('x-paystack-signature');
 
-    // Verify webhook signature
     if (!signature || !process.env.PAYSTACK_SECRET_KEY) {
       console.warn('Paystack webhook: Missing signature or secret key');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -40,38 +42,99 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
     }
 
-    // Parse the verified payload
     const payload = JSON.parse(rawBody);
     const { event, data } = payload;
-
-    // Only handle successful charges
-    if (event !== 'charge.success') {
-      return NextResponse.json({ message: 'Event ignored' }, { status: 200 });
-    }
-
-    const reference = data.reference;
-    if (!reference) {
-      console.warn('Paystack webhook: No reference in payload');
-      return NextResponse.json({ message: 'No reference' }, { status: 200 });
-    }
-
-    // Update client payment status
     const supabase = getSupabase();
-    const { error } = await supabase
-      .from('clients')
-      .update({
+
+    // ── Successful charge (first payment or monthly renewal) ──────────────
+    if (event === 'charge.success') {
+      const reference = data.reference;
+      if (!reference) {
+        console.warn('Paystack webhook: No reference in charge.success payload');
+        return NextResponse.json({ message: 'No reference' }, { status: 200 });
+      }
+
+      const updateFields = {
         payment_status: 'paid',
         notes: `Paystack charge confirmed. Amount: ${data.amount / 100} ${data.currency}. Channel: ${data.channel}. Paid at: ${data.paid_at}`,
-      })
-      .eq('payment_reference', reference)
-      .eq('payment_status', 'pending'); // Idempotent — only update if still pending
+      };
 
-    if (error) {
-      console.error('Paystack webhook: DB update error:', error);
-      // Still return 200 so Paystack doesn't retry endlessly
+      // Store subscription code on first charge so we can cancel later
+      if (data.subscription_code) {
+        updateFields.paystack_subscription_code = data.subscription_code;
+      }
+      if (data.customer?.customer_code) {
+        updateFields.paystack_customer_code = data.customer.customer_code;
+      }
+
+      const { error } = await supabase
+        .from('clients')
+        .update(updateFields)
+        .eq('payment_reference', reference)
+        .eq('payment_status', 'pending'); // Idempotent — only update if still pending
+
+      if (error) {
+        console.error('Paystack webhook: DB update error (charge.success):', error);
+      }
+
+      console.log(`Paystack charge confirmed: ${reference}`);
+
+    // ── Monthly renewal failed ────────────────────────────────────────────
+    } else if (event === 'invoice.payment_failed') {
+      const subscriptionCode = data.subscription?.subscription_code;
+      const customerEmail = data.customer?.email;
+
+      const updateFields = {
+        payment_status: 'overdue',
+        notes: `Paystack renewal failed. Subscription: ${subscriptionCode || 'N/A'}. Failed at: ${new Date().toISOString()}`,
+      };
+
+      // Match by subscription code if we have it, otherwise by email
+      if (subscriptionCode) {
+        await supabase
+          .from('clients')
+          .update(updateFields)
+          .eq('paystack_subscription_code', subscriptionCode);
+      } else if (customerEmail) {
+        await supabase
+          .from('clients')
+          .update(updateFields)
+          .eq('email', customerEmail)
+          .eq('payment_provider', 'paystack');
+      }
+
+      console.log(`Paystack renewal failed: subscription=${subscriptionCode}, email=${customerEmail}`);
+
+    // ── Subscription cancelled / disabled ────────────────────────────────
+    } else if (event === 'subscription.disable') {
+      const subscriptionCode = data.subscription_code;
+      const customerEmail = data.customer?.email;
+
+      const updateFields = {
+        payment_status: 'cancelled',
+        notes: `Paystack subscription cancelled. Code: ${subscriptionCode || 'N/A'}. At: ${new Date().toISOString()}`,
+      };
+
+      if (subscriptionCode) {
+        await supabase
+          .from('clients')
+          .update(updateFields)
+          .eq('paystack_subscription_code', subscriptionCode);
+      } else if (customerEmail) {
+        await supabase
+          .from('clients')
+          .update(updateFields)
+          .eq('email', customerEmail)
+          .eq('payment_provider', 'paystack');
+      }
+
+      console.log(`Paystack subscription cancelled: ${subscriptionCode}`);
+
+    } else {
+      // All other events — log and ignore
+      console.log(`Paystack webhook: Ignored event ${event}`);
     }
 
-    console.log(`Paystack payment confirmed: ${reference}`);
     return NextResponse.json({ message: 'Webhook processed' }, { status: 200 });
   } catch (err) {
     console.error('Paystack webhook error:', err);

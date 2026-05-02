@@ -5,7 +5,10 @@ import { getPlanById } from '../../../../lib/plans';
 /**
  * POST /api/payments/paystack
  *
- * Initializes a Paystack transaction for international card payments.
+ * Initializes a Paystack subscription transaction for card payments.
+ * Passing the `plan` code causes Paystack to auto-enroll the customer
+ * in a recurring subscription after the first charge.
+ *
  * Expects: { clientId: string }
  *
  * SECURITY:
@@ -50,12 +53,14 @@ export async function POST(request) {
 
     // Generate unique reference
     const reference = `AMSC-${Date.now()}-${clientId.slice(0, 8)}`;
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://amsc-performance.vercel.app';
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://amscperformance.com';
 
     // Paystack amount is in kobo (KES cents) — multiply by 100
     const amountInKobo = plan.price * 100;
 
-    // Initialize Paystack transaction
+    // Initialize Paystack transaction with plan code.
+    // Including `plan` causes Paystack to automatically create a recurring
+    // subscription for this customer after the first charge completes.
     const response = await fetch('https://api.paystack.co/transaction/initialize', {
       method: 'POST',
       headers: {
@@ -67,6 +72,7 @@ export async function POST(request) {
         amount: amountInKobo,
         currency: 'KES',
         reference,
+        plan: plan.paystackPlanCode,
         callback_url: `${siteUrl}/join/success?reference=${reference}`,
         metadata: {
           client_id: clientId,
