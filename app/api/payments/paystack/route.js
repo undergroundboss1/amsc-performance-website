@@ -73,6 +73,7 @@ export async function POST(request) {
         currency: 'KES',
         reference,
         plan: plan.paystackPlanCode,
+        channels: ['card', 'mobile_money'],
         callback_url: `${siteUrl}/join/success?reference=${reference}`,
         metadata: {
           client_id: clientId,

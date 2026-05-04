@@ -1,5 +1,5 @@
 """
-This module transforms the AMSC Combine Data Template (.xlsx) into the format
+Transforms the AMSC Combine Data Template (.xlsx) into the format
 expected by the performance engine.
 
 Expected template structure:
@@ -28,7 +28,25 @@ from pathlib import Path
 from typing import Union, Optional
 
 
-# Helpers
+# ── Supabase (optional) ────────────────────────────────────────
+
+def _get_supabase():
+    try:
+        from supabase import create_client
+        from dotenv import load_dotenv
+        import os
+        load_dotenv()
+        url = os.getenv("SUPABASE_URL")
+        key = os.getenv("SUPABASE_KEY")
+        if url and key:
+            return create_client(url, key)
+    except Exception:
+        pass
+    return None
+
+
+# ── Helpers ────────────────────────────────────────────────────
+
 def _safe_float(val) -> Optional[float]:
     """Convert a value to float, returning None for blanks/zeros/errors."""
     if val is None:
@@ -56,7 +74,7 @@ def _best_jump(*vals) -> Optional[float]:
     return max(valid) if valid else None
 
 
-# Sprint Data reader
+# ── Sprint Data reader ─────────────────────────────────────────
 
 # Sprint Data has a two-row merged header (rows 5-6 in Excel).
 # We read with header=None and skip the first 6 rows (rows 1-6),
@@ -113,7 +131,7 @@ def _read_sprint_sheet(file) -> pd.DataFrame:
     return df
 
 
-# Jump Data reader
+# ── Jump Data reader ───────────────────────────────────────────
 
 # Jump Data has a single header row at row 4 in Excel.
 # Row 3 (0-indexed) contains the section group labels — skip rows 0-3.
@@ -157,7 +175,83 @@ def _read_jump_sheet(file) -> pd.DataFrame:
     return df
 
 
-# Row transformers ───────────────────────────────────────────
+# ── RSI Data reader ───────────────────────────────────────────
+# RSI sheet: two-row header (rows 3-4 in Excel), data from row 5.
+# Each athlete has 12 summary values — 4 per leg (DL, SL Left, SL Right):
+#   Avg RSI, Avg GCT (s), Max RSI, Max GCT (s)
+#
+# Column layout (0-indexed):
+#   0         = Athlete Name
+#   1-4       = Double-Leg:       Avg RSI, Avg GCT, Max RSI, Max GCT
+#   5-8       = Single-Leg Left:  Avg RSI, Avg GCT, Max RSI, Max GCT
+#   9-12      = Single-Leg Right: Avg RSI, Avg GCT, Max RSI, Max GCT
+
+RSI_SKIPROWS = 3   # skip rows 1 (title), 2 (instructions), 3 (group headers)
+
+RSI_COLS = {
+    "name":                   0,
+    # Double-leg
+    "rsi_double_avg":         1,
+    "rsi_double_gct_avg":     2,
+    "rsi_double_best":        3,
+    "rsi_double_max_gct":     4,
+    # Single-leg left
+    "rsi_single_left_avg":    5,
+    "rsi_single_left_gct_avg": 6,
+    "rsi_single_left_best":   7,
+    "rsi_single_left_max_gct": 8,
+    # Single-leg right
+    "rsi_single_right_avg":   9,
+    "rsi_single_right_gct_avg": 10,
+    "rsi_single_right_best":  11,
+    "rsi_single_right_max_gct": 12,
+}
+
+
+def _read_rsi_sheet(file) -> Optional[pd.DataFrame]:
+    """
+    Read the RSI Data sheet from the template.
+    Returns None if the sheet doesn't exist — RSI is fully optional.
+    """
+    try:
+        df = pd.read_excel(
+            file,
+            sheet_name="RSI Data",
+            header=None,
+            skiprows=RSI_SKIPROWS,
+            engine="openpyxl",
+        )
+        df = df.dropna(how="all").reset_index(drop=True)
+        rename = {v: k for k, v in RSI_COLS.items() if v < len(df.columns)}
+        df = df.rename(columns=rename)
+        return df
+    except Exception:
+        return None
+
+
+def _transform_rsi_row(row: pd.Series) -> dict:
+    """
+    Transform one RSI summary row into engine-ready fields.
+    Values come in directly — no per-hop calculation needed.
+    Returns all RSI fields keyed by normalised athlete name.
+    """
+    name = str(row.get("name", "")).strip().lower()
+
+    return {
+        "name_key":                 name,
+        "rsi_double_avg":           _safe_float(row.get("rsi_double_avg")),
+        "rsi_double_best":          _safe_float(row.get("rsi_double_best")),
+        "rsi_double_gct_avg":       _safe_float(row.get("rsi_double_gct_avg")),
+        "rsi_single_left_avg":      _safe_float(row.get("rsi_single_left_avg")),
+        "rsi_single_left_best":     _safe_float(row.get("rsi_single_left_best")),
+        "rsi_single_left_gct_avg":  _safe_float(row.get("rsi_single_left_gct_avg")),
+        "rsi_single_right_avg":     _safe_float(row.get("rsi_single_right_avg")),
+        "rsi_single_right_best":    _safe_float(row.get("rsi_single_right_best")),
+        "rsi_single_right_gct_avg": _safe_float(row.get("rsi_single_right_gct_avg")),
+    }
+
+
+# ── Row transformers ───────────────────────────────────────────
 
 def _transform_sprint_row(row: pd.Series) -> dict:
     """
@@ -174,7 +268,7 @@ def _transform_sprint_row(row: pd.Series) -> dict:
     age    = row.get("age", "")
     notes  = str(row.get("notes", "")) if pd.notna(row.get("notes")) else ""
 
-    # Sprint bests 
+    # ── Sprint bests ───────────────────────────────────────────
     # Prefer computed best from attempts; fall back to template's Best column
     m20 = (
         _best_of(row.get("m20_a1"), row.get("m20_a2"), row.get("m20_a3"))
@@ -193,7 +287,7 @@ def _transform_sprint_row(row: pd.Series) -> dict:
         or _safe_float(row.get("m100_best"))
     )
 
-    # Derived splits 
+    # ── Derived splits ─────────────────────────────────────────
     # 60m and 80m are not directly measured — interpolate from 40m + 100m
     if m40 and m100:
         gap = m100 - m40
@@ -235,19 +329,6 @@ def _transform_sprint_row(row: pd.Series) -> dict:
         "cmj_cm":      None,
         "broad_cm":    None,
 
-        # RSI fields — filled in later once the RSI sheet is merged.
-        # All None until the updated template (with Avg RSI, Avg GCT,
-        # Max RSI, Max GCT per leg) is confirmed and a reader is added.
-        "rsi_double_avg":           None,
-        "rsi_double_best":          None,
-        "rsi_double_gct_avg":       None,
-        "rsi_single_left_avg":      None,
-        "rsi_single_left_best":     None,
-        "rsi_single_left_gct_avg":  None,
-        "rsi_single_right_avg":     None,
-        "rsi_single_right_best":    None,
-        "rsi_single_right_gct_avg": None,
-
         "_warnings": warnings,
     }
 
@@ -275,28 +356,96 @@ def _transform_jump_row(row: pd.Series) -> dict:
     }
 
 
+# ── Supabase storage ───────────────────────────────────────────
+
+def _store_raw_session(row: pd.Series, supabase) -> None:
+    """Store a single raw sprint row in Supabase raw_sessions table."""
+    if not supabase:
+        return
+
+    def safe(key, cast=float):
+        try:
+            val = row.get(key)
+            if val is not None and pd.notna(val):
+                return cast(val)
+        except (ValueError, TypeError):
+            pass
+        return None
+
+    data = {
+        "athlete_name": str(row.get("name", "")),
+        "age":          safe("age", int),
+        "gender":       str(row.get("gender", "")),
+        "sport":        str(row.get("sport", "")),
+        "m10_a1":  safe("m10_a1"),  "m10_a2":  safe("m10_a2"),
+        "m10_a3":  safe("m10_a3"),  "m10_best": safe("m10_best"),
+        "m20_a1":  safe("m20_a1"),  "m20_a2":  safe("m20_a2"),
+        "m20_a3":  safe("m20_a3"),  "m20_best": safe("m20_best"),
+        "m30_a1":  safe("m30_a1"),  "m30_a2":  safe("m30_a2"),
+        "m30_a3":  safe("m30_a3"),  "m30_best": safe("m30_best"),
+        "m40_a1":  safe("m40_a1"),  "m40_a2":  safe("m40_a2"),
+        "m40_a3":  safe("m40_a3"),  "m40_best": safe("m40_best"),
+        "fly10_a1": safe("fly10_a1"), "fly10_a2": safe("fly10_a2"),
+        "fly10_a3": safe("fly10_a3"), "fly10_best": safe("fly10_best"),
+        "fly20_a1": safe("fly20_a1"), "fly20_a2": safe("fly20_a2"),
+        "fly20_a3": safe("fly20_a3"), "fly20_best": safe("fly20_best"),
+        "m100_a1": safe("m100_a1"),  "m100_a2": safe("m100_a2"),
+        "m100_a3": safe("m100_a3"),  "m100_best": safe("m100_best"),
+        "notes":   str(row.get("notes", "")) if pd.notna(row.get("notes")) else None,
+    }
+
+    try:
+        supabase.table("raw_sessions").insert(data).execute()
+    except Exception as e:
+        print(f"Supabase insert failed for {row.get('name', '?')}: {e}")
+
 
 # ── Main entry points ──────────────────────────────────────────
 
 def process_template(file) -> pd.DataFrame:
+    """
+    Full pipeline for the AMSC Combine Template (.xlsx):
+      1. Read Sprint Data sheet
+      2. Read Jump Data sheet
+      3. Transform each sprint row into engine-ready format
+      4. Merge jump data on athlete name
+      5. Store raw sprint data in Supabase (if connected)
+      6. Return engine-ready DataFrame
+
+    Warnings are attached as df.attrs['warnings'].
+
+    Args:
+        file: file path (str/Path) or file-like object (e.g. Streamlit UploadedFile)
+    """
+    supabase = _get_supabase()
     all_warnings = []
 
     # ── Read sheets ────────────────────────────────────────────
     sprint_raw = _read_sprint_sheet(file)
 
-    # Reset file pointer if it's a file-like object, so jump read works too
     if hasattr(file, "seek"):
         file.seek(0)
-
     jump_raw = _read_jump_sheet(file)
 
+    # RSI sheet is optional — returns None if sheet doesn't exist
+    if hasattr(file, "seek"):
+        file.seek(0)
+    rsi_raw = _read_rsi_sheet(file)
+
     # ── Transform jump rows into a lookup dict ─────────────────
-    # Keyed by lowercase athlete name for case-insensitive matching
     jump_lookup = {}
     for _, jrow in jump_raw.iterrows():
         j = _transform_jump_row(jrow)
         if j["name_key"]:
             jump_lookup[j["name_key"]] = j
+
+    # ── Transform RSI rows into a lookup dict ──────────────────
+    rsi_lookup = {}
+    if rsi_raw is not None:
+        for _, rrow in rsi_raw.iterrows():
+            r = _transform_rsi_row(rrow)
+            if r["name_key"]:
+                rsi_lookup[r["name_key"]] = r
 
     # ── Transform sprint rows ──────────────────────────────────
     transformed = []
@@ -307,6 +456,9 @@ def process_template(file) -> pd.DataFrame:
         # Skip empty rows, header remnants, and the template legend row
         if not name or name.lower() in ("athlete name*", "nan", "", "legend"):
             continue
+
+        # Store raw data in Supabase
+        _store_raw_session(row, supabase)
 
         # Transform sprint row
         result = _transform_sprint_row(row)
@@ -322,6 +474,27 @@ def process_template(file) -> pd.DataFrame:
             result["broad_cm"] = jump_lookup[name_key]["broad_cm"]
         else:
             all_warnings.append(f"{name}: No jump data found — CMJ and Broad Jump will show N/A")
+
+        # Merge RSI data if available (fully optional)
+        if name_key in rsi_lookup:
+            rsi = rsi_lookup[name_key]
+            result["rsi_double_avg"]          = rsi["rsi_double_avg"]
+            result["rsi_double_best"]         = rsi["rsi_double_best"]
+            result["rsi_double_gct_avg"]      = rsi["rsi_double_gct_avg"]
+            result["rsi_single_left_avg"]     = rsi["rsi_single_left_avg"]
+            result["rsi_single_left_best"]    = rsi["rsi_single_left_best"]
+            result["rsi_single_left_gct_avg"] = rsi["rsi_single_left_gct_avg"]
+            result["rsi_single_right_avg"]    = rsi["rsi_single_right_avg"]
+            result["rsi_single_right_best"]   = rsi["rsi_single_right_best"]
+            result["rsi_single_right_gct_avg"]= rsi["rsi_single_right_gct_avg"]
+        else:
+            # RSI fields default to None — no warning, RSI is optional
+            for field in [
+                "rsi_double_avg", "rsi_double_best", "rsi_double_gct_avg",
+                "rsi_single_left_avg", "rsi_single_left_best", "rsi_single_left_gct_avg",
+                "rsi_single_right_avg", "rsi_single_right_best", "rsi_single_right_gct_avg",
+            ]:
+                result[field] = None
 
         transformed.append(result)
 

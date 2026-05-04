@@ -193,63 +193,23 @@ function PaymentContent() {
           </div>
         )}
 
-        {/* Payment Options */}
-        <div className="space-y-3">
-          {/* Card \u2014 Primary / Recommended */}
-          <button
-            type="button"
-            onClick={() => handlePay('paystack')}
-            disabled={paying !== null}
-            className="w-full bg-accent/10 border-2 border-accent/60 rounded-xl p-5 text-left hover:bg-accent/20 hover:border-accent transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed group"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="font-display font-bold text-white tracking-wide flex items-center gap-3">
-                  Pay with Card
-                  <span className="text-[10px] font-display font-bold tracking-widest bg-accent text-white px-2 py-0.5 rounded uppercase">
-                    Recommended
-                  </span>
-                </span>
-                <p className="text-white/50 text-xs font-body mt-1">
-                  Visa or Mastercard \u00b7 Auto-renews monthly \u00b7 Cancel anytime
-                </p>
-              </div>
-              <span className="text-accent group-hover:translate-x-1 transition-transform">
-                {paying === 'paystack' ? (
-                  <span className="inline-block w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  '\u2192'
-                )}
-              </span>
-            </div>
-          </button>
+        {/* Pay Button */}
+        <button
+          type="button"
+          onClick={() => handlePay('paystack')}
+          disabled={paying !== null}
+          className="w-full bg-accent hover:bg-accent/90 text-white font-display font-bold text-base tracking-widest uppercase rounded-xl p-5 transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+        >
+          {paying === 'paystack' ? (
+            <span className="inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          ) : (
+            'Pay Now \u2192'
+          )}
+        </button>
 
-          {/* M-Pesa \u2014 Secondary */}
-          <button
-            type="button"
-            onClick={() => handlePay('intasend')}
-            disabled={paying !== null}
-            className="w-full bg-white/5 border border-white/10 rounded-xl p-5 text-left hover:bg-white/10 hover:border-white/20 transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed group"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="font-display font-bold text-white/80 tracking-wide">
-                  Pay with M-Pesa
-                </span>
-                <p className="text-white/40 text-xs font-body mt-1">
-                  M-Pesa or Airtel Money via IntaSend
-                </p>
-              </div>
-              <span className="text-white/40 group-hover:translate-x-1 transition-transform">
-                {paying === 'intasend' ? (
-                  <span className="inline-block w-5 h-5 border-2 border-white/40 border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  '\u2192'
-                )}
-              </span>
-            </div>
-          </button>
-        </div>
+        <p className="text-center text-white/40 text-xs font-body mt-3">
+          Card \u00b7 M-Pesa \u00b7 Auto-renews monthly \u00b7 Cancel anytime
+        </p>
 
         {/* Security note */}
         <p className="text-center text-secondary text-xs font-body mt-8">
