@@ -68,9 +68,11 @@ function ApplicationCard({ client, adminKey, onUpdate }) {
 
       if (action === 'approve' && data.paymentUrl) {
         setPaymentLink(data.paymentUrl);
+        // Don't refresh the list — card would disappear from pending_review filter
+        // before the user can copy/send the link. They can refresh manually.
+      } else {
+        onUpdate();
       }
-
-      onUpdate();
     } catch {
       alert('Network error. Please try again.');
     } finally {
