@@ -211,6 +211,16 @@ RSI_COLS = {
     "rsi_single_right_gct_avg": 10,
     "rsi_single_right_best":  11,
     "rsi_single_right_max_gct": 12,
+    # Drop jump — 40 cm / 50 cm / 60 cm box heights
+    "dj_40_rsi":              13,
+    "dj_40_jump_ht":          14,
+    "dj_40_gct":              15,
+    "dj_50_rsi":              16,
+    "dj_50_jump_ht":          17,
+    "dj_50_gct":              18,
+    "dj_60_rsi":              19,
+    "dj_60_jump_ht":          20,
+    "dj_60_gct":              21,
 }
 
 
@@ -254,6 +264,16 @@ def _transform_rsi_row(row: pd.Series) -> dict:
         "rsi_single_right_avg":     _safe_float(row.get("rsi_single_right_avg")),
         "rsi_single_right_best":    _safe_float(row.get("rsi_single_right_best")),
         "rsi_single_right_gct_avg": _safe_float(row.get("rsi_single_right_gct_avg")),
+        # Drop jump
+        "dj_40_rsi":                _safe_float(row.get("dj_40_rsi")),
+        "dj_40_jump_ht":            _safe_float(row.get("dj_40_jump_ht")),
+        "dj_40_gct":                _safe_float(row.get("dj_40_gct")),
+        "dj_50_rsi":                _safe_float(row.get("dj_50_rsi")),
+        "dj_50_jump_ht":            _safe_float(row.get("dj_50_jump_ht")),
+        "dj_50_gct":                _safe_float(row.get("dj_50_gct")),
+        "dj_60_rsi":                _safe_float(row.get("dj_60_rsi")),
+        "dj_60_jump_ht":            _safe_float(row.get("dj_60_jump_ht")),
+        "dj_60_gct":                _safe_float(row.get("dj_60_gct")),
     }
 
 

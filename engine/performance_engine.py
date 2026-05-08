@@ -412,6 +412,16 @@ def evaluate_athlete(
     rsi_single_right_avg:     Optional[float] = None,
     rsi_single_right_best:    Optional[float] = None,
     rsi_single_right_gct_avg: Optional[float] = None,
+    # Drop jump RSI — 40 cm / 50 cm / 60 cm box heights
+    dj_40_rsi:     Optional[float] = None,
+    dj_40_jump_ht: Optional[float] = None,
+    dj_40_gct:     Optional[float] = None,
+    dj_50_rsi:     Optional[float] = None,
+    dj_50_jump_ht: Optional[float] = None,
+    dj_50_gct:     Optional[float] = None,
+    dj_60_rsi:     Optional[float] = None,
+    dj_60_jump_ht: Optional[float] = None,
+    dj_60_gct:     Optional[float] = None,
     # Additional passthrough fields — stored in output but not used for classification
     split_0_10:  Optional[float] = None,
     split_0_30:  Optional[float] = None,
@@ -443,6 +453,17 @@ def evaluate_athlete(
     rsi_single_right_cat = classify_rsi_single(gender, rsi_single_right_avg)
     rsi_asymmetry        = compute_rsi_asymmetry(rsi_single_left_avg, rsi_single_right_avg)
     power_profile_type   = detect_power_profile_type(cmj_cat, rsi_double_cat)
+
+    # Drop jump — derive best RSI and optimal height
+    dj_scores = {
+        40: dj_40_rsi,
+        50: dj_50_rsi,
+        60: dj_60_rsi,
+    }
+    valid_dj = {h: v for h, v in dj_scores.items() if v is not None}
+    dj_best_rsi      = max(valid_dj.values()) if valid_dj else None
+    dj_optimal_height = max(valid_dj, key=valid_dj.get) if valid_dj else None
+    dj_best_cat      = classify_rsi_double(gender, dj_best_rsi)
 
     power     = classify_power(cmj_cat, broad_cat, rsi_double_cat)
     imbalance = detect_primary_imbalance(
@@ -487,6 +508,20 @@ def evaluate_athlete(
         "rsi_single_right_avg":     rsi_single_right_avg,
         "rsi_single_right_best":    rsi_single_right_best,
         "rsi_single_right_gct_avg": rsi_single_right_gct_avg,
+        # Drop jump raw inputs
+        "dj_40_rsi":     dj_40_rsi,
+        "dj_40_jump_ht": dj_40_jump_ht,
+        "dj_40_gct":     dj_40_gct,
+        "dj_50_rsi":     dj_50_rsi,
+        "dj_50_jump_ht": dj_50_jump_ht,
+        "dj_50_gct":     dj_50_gct,
+        "dj_60_rsi":     dj_60_rsi,
+        "dj_60_jump_ht": dj_60_jump_ht,
+        "dj_60_gct":     dj_60_gct,
+        # Drop jump derived
+        "dj_best_rsi":       dj_best_rsi,
+        "dj_optimal_height": dj_optimal_height,
+        "dj_best_category":  dj_best_cat.value if dj_best_cat else None,
         "20_40":                 segs["20_40"],
         "40_60":                 segs["40_60"],
         "60_80":                 segs["60_80"],
@@ -557,6 +592,15 @@ def evaluate_batch(df: pd.DataFrame) -> tuple:
                 rsi_single_right_avg     = _opt(row, "rsi_single_right_avg"),
                 rsi_single_right_best    = _opt(row, "rsi_single_right_best"),
                 rsi_single_right_gct_avg = _opt(row, "rsi_single_right_gct_avg"),
+                dj_40_rsi     = _opt(row, "dj_40_rsi"),
+                dj_40_jump_ht = _opt(row, "dj_40_jump_ht"),
+                dj_40_gct     = _opt(row, "dj_40_gct"),
+                dj_50_rsi     = _opt(row, "dj_50_rsi"),
+                dj_50_jump_ht = _opt(row, "dj_50_jump_ht"),
+                dj_50_gct     = _opt(row, "dj_50_gct"),
+                dj_60_rsi     = _opt(row, "dj_60_rsi"),
+                dj_60_jump_ht = _opt(row, "dj_60_jump_ht"),
+                dj_60_gct     = _opt(row, "dj_60_gct"),
             )
             results.append(result)
         except Exception as e:
@@ -586,6 +630,11 @@ def batch_to_dataframe(results: List[Dict[str, Any]]) -> pd.DataFrame:
         "rsi_double_avg", "rsi_double_best", "rsi_double_gct_avg",
         "rsi_single_left_avg", "rsi_single_left_best", "rsi_single_left_gct_avg",
         "rsi_single_right_avg", "rsi_single_right_best", "rsi_single_right_gct_avg",
+        # Drop jump raw
+        "dj_40_rsi", "dj_40_jump_ht", "dj_40_gct",
+        "dj_50_rsi", "dj_50_jump_ht", "dj_50_gct",
+        "dj_60_rsi", "dj_60_jump_ht", "dj_60_gct",
+        "dj_best_rsi", "dj_optimal_height", "dj_best_category",
         "20_40", "40_60", "60_80", "80_100",
         "peak_velocity_segment", "peak_velocity_zone",
         "acceleration_category", "max_velocity_category",
@@ -611,6 +660,10 @@ def batch_to_dataframe(results: List[Dict[str, Any]]) -> pd.DataFrame:
         "rsi_single_left_avg", "rsi_single_left_best", "rsi_single_left_gct_avg",
         "rsi_single_right_avg", "rsi_single_right_best", "rsi_single_right_gct_avg",
         "rsi_asymmetry_pct",
+        "dj_40_rsi", "dj_40_jump_ht", "dj_40_gct",
+        "dj_50_rsi", "dj_50_jump_ht", "dj_50_gct",
+        "dj_60_rsi", "dj_60_jump_ht", "dj_60_gct",
+        "dj_best_rsi",
     ]
 
     for col in time_cols:
