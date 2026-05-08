@@ -15,11 +15,13 @@ Column layout (Sprint Data) — read by position, not name:
   Col 8-11:  20m  A1, A2, A3, Best
   Col 12-15: 30m  A1, A2, A3, Best
   Col 16-19: 40m  A1, A2, A3, Best
-  Col 20-23: Fly10 A1, A2, A3, Best
-  Col 24-27: Fly20 A1, A2, A3, Best
-  Col 28-31: 100m  A1, A2, A3, Best
-  Col 32-35: Pro Agility A1, A2, A3, Best
-  Col 36:    Notes
+  Col 20-23: 60m  A1, A2, A3, Best
+  Col 24-27: 80m  A1, A2, A3, Best
+  Col 28-31: Fly10 A1, A2, A3, Best
+  Col 32-35: Fly20 A1, A2, A3, Best
+  Col 36-39: 100m  A1, A2, A3, Best
+  Col 40-43: Pro Agility A1, A2, A3, Best
+  Col 44:    Notes
 """
 
 import pandas as pd
@@ -95,16 +97,20 @@ SPRINT_COLS = {
     "m30_a1":    12,  "m30_a2": 13,  "m30_a3": 14,  "m30_best": 15,
     # 40m
     "m40_a1":    16,  "m40_a2": 17,  "m40_a3": 18,  "m40_best": 19,
+    # 60m
+    "m60_a1":    20,  "m60_a2": 21,  "m60_a3": 22,  "m60_best": 23,
+    # 80m
+    "m80_a1":    24,  "m80_a2": 25,  "m80_a3": 26,  "m80_best": 27,
     # Flying 10m
-    "fly10_a1":  20,  "fly10_a2": 21, "fly10_a3": 22, "fly10_best": 23,
+    "fly10_a1":  28,  "fly10_a2": 29, "fly10_a3": 30, "fly10_best": 31,
     # Flying 20m
-    "fly20_a1":  24,  "fly20_a2": 25, "fly20_a3": 26, "fly20_best": 27,
+    "fly20_a1":  32,  "fly20_a2": 33, "fly20_a3": 34, "fly20_best": 35,
     # 100m
-    "m100_a1":   28,  "m100_a2": 29,  "m100_a3": 30,  "m100_best": 31,
+    "m100_a1":   36,  "m100_a2": 37,  "m100_a3": 38,  "m100_best": 39,
     # Pro Agility
-    "pag_a1":    32,  "pag_a2":  33,  "pag_a3":  34,  "pag_best":  35,
+    "pag_a1":    40,  "pag_a2":  41,  "pag_a3":  42,  "pag_best":  43,
     # Notes
-    "notes":     36,
+    "notes":     44,
 }
 
 
@@ -270,34 +276,67 @@ def _transform_sprint_row(row: pd.Series) -> dict:
 
     # ── Sprint bests ───────────────────────────────────────────
     # Prefer computed best from attempts; fall back to template's Best column
+    m10 = (
+        _best_of(row.get("m10_a1"), row.get("m10_a2"), row.get("m10_a3"))
+        or _safe_float(row.get("m10_best"))
+    )
     m20 = (
         _best_of(row.get("m20_a1"), row.get("m20_a2"), row.get("m20_a3"))
         or _safe_float(row.get("m20_best"))
+    )
+    m30 = (
+        _best_of(row.get("m30_a1"), row.get("m30_a2"), row.get("m30_a3"))
+        or _safe_float(row.get("m30_best"))
     )
     m40 = (
         _best_of(row.get("m40_a1"), row.get("m40_a2"), row.get("m40_a3"))
         or _safe_float(row.get("m40_best"))
     )
+    m60_direct = (
+        _best_of(row.get("m60_a1"), row.get("m60_a2"), row.get("m60_a3"))
+        or _safe_float(row.get("m60_best"))
+    )
+    m80_direct = (
+        _best_of(row.get("m80_a1"), row.get("m80_a2"), row.get("m80_a3"))
+        or _safe_float(row.get("m80_best"))
+    )
     fly10 = (
         _best_of(row.get("fly10_a1"), row.get("fly10_a2"), row.get("fly10_a3"))
         or _safe_float(row.get("fly10_best"))
+    )
+    fly20 = (
+        _best_of(row.get("fly20_a1"), row.get("fly20_a2"), row.get("fly20_a3"))
+        or _safe_float(row.get("fly20_best"))
     )
     m100 = (
         _best_of(row.get("m100_a1"), row.get("m100_a2"), row.get("m100_a3"))
         or _safe_float(row.get("m100_best"))
     )
+    pro_agility = (
+        _best_of(row.get("pag_a1"), row.get("pag_a2"), row.get("pag_a3"))
+        or _safe_float(row.get("pag_best"))
+    )
 
-    # ── Derived splits ─────────────────────────────────────────
-    # 60m and 80m are not directly measured — interpolate from 40m + 100m
-    if m40 and m100:
+    # ── 60m and 80m splits ─────────────────────────────────────
+    # Use direct measurements if available; otherwise interpolate from 40m + 100m
+    if m60_direct:
+        split_0_60 = m60_direct
+    elif m40 and m100:
         gap = m100 - m40
         split_0_60 = round(m40 + gap * 0.33, 3)
-        split_0_80 = round(m40 + gap * 0.67, 3)
     else:
         split_0_60 = None
+
+    if m80_direct:
+        split_0_80 = m80_direct
+    elif m40 and m100:
+        gap = m100 - m40
+        split_0_80 = round(m40 + gap * 0.67, 3)
+    else:
         split_0_80 = None
-        if not m100:
-            warnings.append("No 100m data — 60m and 80m splits cannot be calculated")
+
+    if not m100:
+        warnings.append("No 100m data — 60m/80m splits cannot be interpolated, 100m fields will show N/A in report")
 
     # ── Flag missing required fields ───────────────────────────
     if not m20:
@@ -306,8 +345,6 @@ def _transform_sprint_row(row: pd.Series) -> dict:
         warnings.append("No 40m data found")
     if not fly10:
         warnings.append("No Flying 10m data found")
-    if not m100:
-        warnings.append("No 100m data — 100m fields will show N/A in report")
 
     return {
         # Identity
@@ -318,12 +355,16 @@ def _transform_sprint_row(row: pd.Series) -> dict:
         "notes":       notes,
 
         # Engine-ready splits
+        "split_0_10":  m10,
         "split_0_20":  m20,
+        "split_0_30":  m30,
         "split_0_40":  m40,
         "split_0_60":  split_0_60,
         "split_0_80":  split_0_80,
         "split_0_100": m100,
         "fly10":       fly10,
+        "fly20":       fly20,
+        "pro_agility": pro_agility,
 
         # Jump fields — filled in later by merge
         "cmj_cm":      None,
@@ -476,24 +517,17 @@ def process_template(file) -> pd.DataFrame:
             all_warnings.append(f"{name}: No jump data found — CMJ and Broad Jump will show N/A")
 
         # Merge RSI data if available (fully optional)
+        rsi_fields = [
+            "rsi_double_avg", "rsi_double_best", "rsi_double_gct_avg",
+            "rsi_single_left_avg", "rsi_single_left_best", "rsi_single_left_gct_avg",
+            "rsi_single_right_avg", "rsi_single_right_best", "rsi_single_right_gct_avg",
+        ]
         if name_key in rsi_lookup:
             rsi = rsi_lookup[name_key]
-            result["rsi_double_avg"]          = rsi["rsi_double_avg"]
-            result["rsi_double_best"]         = rsi["rsi_double_best"]
-            result["rsi_double_gct_avg"]      = rsi["rsi_double_gct_avg"]
-            result["rsi_single_left_avg"]     = rsi["rsi_single_left_avg"]
-            result["rsi_single_left_best"]    = rsi["rsi_single_left_best"]
-            result["rsi_single_left_gct_avg"] = rsi["rsi_single_left_gct_avg"]
-            result["rsi_single_right_avg"]    = rsi["rsi_single_right_avg"]
-            result["rsi_single_right_best"]   = rsi["rsi_single_right_best"]
-            result["rsi_single_right_gct_avg"]= rsi["rsi_single_right_gct_avg"]
+            for field in rsi_fields:
+                result[field] = rsi.get(field)
         else:
-            # RSI fields default to None — no warning, RSI is optional
-            for field in [
-                "rsi_double_avg", "rsi_double_best", "rsi_double_gct_avg",
-                "rsi_single_left_avg", "rsi_single_left_best", "rsi_single_left_gct_avg",
-                "rsi_single_right_avg", "rsi_single_right_best", "rsi_single_right_gct_avg",
-            ]:
+            for field in rsi_fields:
                 result[field] = None
 
         transformed.append(result)

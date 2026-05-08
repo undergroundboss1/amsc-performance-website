@@ -403,15 +403,20 @@ def evaluate_athlete(
     cmj_cm:      Optional[float] = None,
     broad_cm:    Optional[float] = None,
     # RSI — all optional; if None the metric is skipped
-    rsi_double_avg:          Optional[float] = None,
-    rsi_double_best:         Optional[float] = None,
-    rsi_double_gct_avg:      Optional[float] = None,
-    rsi_single_left_avg:     Optional[float] = None,
-    rsi_single_left_best:    Optional[float] = None,
-    rsi_single_left_gct_avg: Optional[float] = None,
-    rsi_single_right_avg:    Optional[float] = None,
-    rsi_single_right_best:   Optional[float] = None,
+    rsi_double_avg:           Optional[float] = None,
+    rsi_double_best:          Optional[float] = None,
+    rsi_double_gct_avg:       Optional[float] = None,
+    rsi_single_left_avg:      Optional[float] = None,
+    rsi_single_left_best:     Optional[float] = None,
+    rsi_single_left_gct_avg:  Optional[float] = None,
+    rsi_single_right_avg:     Optional[float] = None,
+    rsi_single_right_best:    Optional[float] = None,
     rsi_single_right_gct_avg: Optional[float] = None,
+    # Additional passthrough fields — stored in output but not used for classification
+    split_0_10:  Optional[float] = None,
+    split_0_30:  Optional[float] = None,
+    fly20:       Optional[float] = None,
+    pro_agility: Optional[float] = None,
 ) -> Dict[str, Any]:
 
     validation_errors = validate_inputs(
@@ -460,12 +465,16 @@ def evaluate_athlete(
         "gender": gender,
         "sport":  sport,
         "date":   date,
+        "0_10":    split_0_10,
         "0_20":    split_0_20,
+        "0_30":    split_0_30,
         "0_40":    split_0_40,
         "0_60":    split_0_60,
         "0_80":    split_0_80,
         "0_100":   split_0_100,
         "fly10":   fly10,
+        "fly20":   fly20,
+        "pro_agility": pro_agility,
         "cmj_cm":  cmj_cm,
         "broad_cm": broad_cm,
         # RSI raw inputs
@@ -527,12 +536,16 @@ def evaluate_batch(df: pd.DataFrame) -> tuple:
                 gender      = str(row["gender"]).lower().strip(),
                 sport       = str(row["sport"]),
                 date        = str(row.get("date", "")),
+                split_0_10  = _opt(row, "split_0_10"),
                 split_0_20  = float(row["split_0_20"]),
+                split_0_30  = _opt(row, "split_0_30"),
                 split_0_40  = float(row["split_0_40"]),
                 split_0_60  = _opt(row, "split_0_60"),
                 split_0_80  = _opt(row, "split_0_80"),
                 split_0_100 = _opt(row, "split_0_100"),
                 fly10       = float(row["fly10"]),
+                fly20       = _opt(row, "fly20"),
+                pro_agility = _opt(row, "pro_agility"),
                 cmj_cm      = _opt(row, "cmj_cm"),
                 broad_cm    = _opt(row, "broad_cm"),
                 rsi_double_avg           = _opt(row, "rsi_double_avg"),
@@ -567,8 +580,8 @@ def evaluate_batch(df: pd.DataFrame) -> tuple:
 def batch_to_dataframe(results: List[Dict[str, Any]]) -> pd.DataFrame:
     column_order = [
         "name", "gender", "sport", "date",
-        "0_20", "0_40", "0_60", "0_80", "0_100",
-        "fly10", "cmj_cm", "broad_cm",
+        "0_10", "0_20", "0_30", "0_40", "0_60", "0_80", "0_100",
+        "fly10", "fly20", "pro_agility", "cmj_cm", "broad_cm",
         # RSI raw
         "rsi_double_avg", "rsi_double_best", "rsi_double_gct_avg",
         "rsi_single_left_avg", "rsi_single_left_best", "rsi_single_left_gct_avg",
@@ -589,8 +602,8 @@ def batch_to_dataframe(results: List[Dict[str, Any]]) -> pd.DataFrame:
 
     df = pd.DataFrame(results)
 
-    time_cols = ["0_20","0_40","0_60","0_80","0_100",
-                 "fly10","20_40","40_60","60_80","80_100",
+    time_cols = ["0_10","0_20","0_30","0_40","0_60","0_80","0_100",
+                 "fly10","fly20","pro_agility","20_40","40_60","60_80","80_100",
                  "peak_velocity_segment"]
     jump_cols = ["cmj_cm", "broad_cm"]
     rsi_cols  = [
