@@ -71,6 +71,38 @@ def _map_fields(data: dict) -> dict:
         "power_level":                data.get("power_level"),
         "primary_imbalance_flag":     data.get("primary_imbalance_flag"),
         "missing_fields":             data.get("missing_fields"),
+
+        # Hop RSI raw
+        "rsi_double_avg":           _float(data.get("rsi_double_avg")),
+        "rsi_double_best":          _float(data.get("rsi_double_best")),
+        "rsi_double_gct_avg":       _float(data.get("rsi_double_gct_avg")),
+        "rsi_single_left_avg":      _float(data.get("rsi_single_left_avg")),
+        "rsi_single_left_best":     _float(data.get("rsi_single_left_best")),
+        "rsi_single_left_gct_avg":  _float(data.get("rsi_single_left_gct_avg")),
+        "rsi_single_right_avg":     _float(data.get("rsi_single_right_avg")),
+        "rsi_single_right_best":    _float(data.get("rsi_single_right_best")),
+        "rsi_single_right_gct_avg": _float(data.get("rsi_single_right_gct_avg")),
+        # Hop RSI classifications (DB uses _cat, engine uses _category)
+        "rsi_double_category":       data.get("rsi_double_category"),
+        "rsi_single_left_category":  data.get("rsi_single_left_cat"),
+        "rsi_single_right_category": data.get("rsi_single_right_cat"),
+        "rsi_asymmetry_pct":         _float(data.get("rsi_asymmetry_pct")),
+        "rsi_dominant_side":         data.get("rsi_dominant_side"),
+        "rsi_asymmetry_flag":        data.get("rsi_asymmetry_flagged"),
+        "power_profile_type":        data.get("power_profile_type"),
+        # Drop jump RSI
+        "dj_40_rsi":       _float(data.get("dj_40_rsi")),
+        "dj_40_jump_ht":   _float(data.get("dj_40_jump_ht")),
+        "dj_40_gct":       _float(data.get("dj_40_gct")),
+        "dj_50_rsi":       _float(data.get("dj_50_rsi")),
+        "dj_50_jump_ht":   _float(data.get("dj_50_jump_ht")),
+        "dj_50_gct":       _float(data.get("dj_50_gct")),
+        "dj_60_rsi":       _float(data.get("dj_60_rsi")),
+        "dj_60_jump_ht":   _float(data.get("dj_60_jump_ht")),
+        "dj_60_gct":       _float(data.get("dj_60_gct")),
+        "dj_best_rsi":         _float(data.get("dj_best_rsi")),
+        "dj_optimal_height":   data.get("dj_optimal_height"),
+        "dj_best_category":    data.get("dj_best_category"),
     }
 
 

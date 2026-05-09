@@ -102,6 +102,38 @@ export async function POST(request) {
       power_level:                r.power_level                ?? null,
       primary_imbalance_flag:     r.primary_imbalance_flag     ?? null,
       missing_fields:             r.missing_fields             ?? null,
+
+      // Hop RSI raw
+      rsi_double_avg:           r.rsi_double_avg           ?? null,
+      rsi_double_best:          r.rsi_double_best          ?? null,
+      rsi_double_gct_avg:       r.rsi_double_gct_avg       ?? null,
+      rsi_single_left_avg:      r.rsi_single_left_avg      ?? null,
+      rsi_single_left_best:     r.rsi_single_left_best     ?? null,
+      rsi_single_left_gct_avg:  r.rsi_single_left_gct_avg  ?? null,
+      rsi_single_right_avg:     r.rsi_single_right_avg     ?? null,
+      rsi_single_right_best:    r.rsi_single_right_best    ?? null,
+      rsi_single_right_gct_avg: r.rsi_single_right_gct_avg ?? null,
+      // Hop RSI classifications (note DB column name differences)
+      rsi_double_category:      r.rsi_double_category       ?? null,
+      rsi_single_left_cat:      r.rsi_single_left_category  ?? null,
+      rsi_single_right_cat:     r.rsi_single_right_category ?? null,
+      rsi_asymmetry_pct:        r.rsi_asymmetry_pct         ?? null,
+      rsi_dominant_side:        r.rsi_dominant_side         ?? null,
+      rsi_asymmetry_flagged:    r.rsi_asymmetry_flag        ?? null,
+      power_profile_type:       r.power_profile_type        ?? null,
+      // Drop jump RSI
+      dj_40_rsi:        r.dj_40_rsi        ?? null,
+      dj_40_jump_ht:    r.dj_40_jump_ht    ?? null,
+      dj_40_gct:        r.dj_40_gct        ?? null,
+      dj_50_rsi:        r.dj_50_rsi        ?? null,
+      dj_50_jump_ht:    r.dj_50_jump_ht    ?? null,
+      dj_50_gct:        r.dj_50_gct        ?? null,
+      dj_60_rsi:        r.dj_60_rsi        ?? null,
+      dj_60_jump_ht:    r.dj_60_jump_ht    ?? null,
+      dj_60_gct:        r.dj_60_gct        ?? null,
+      dj_best_rsi:      r.dj_best_rsi      ?? null,
+      dj_optimal_height: r.dj_optimal_height ?? null,
+      dj_best_category:  r.dj_best_category  ?? null,
     }));
 
     const { data: inserted, error: insertError } = await supabase

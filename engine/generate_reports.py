@@ -684,6 +684,94 @@ def _build_pdf_elements(row: pd.Series, logo=None) -> tuple:
         Spacer(1, 5),
     ]))
 
+    # ── Section 3: Reactive Strength Profile ─────────────────
+    rsi_dl_avg   = row.get("rsi_double_avg")
+    rsi_sl_l_avg = row.get("rsi_single_left_avg")
+    rsi_sl_r_avg = row.get("rsi_single_right_avg")
+    has_hop_rsi  = any(v is not None for v in (rsi_dl_avg, rsi_sl_l_avg, rsi_sl_r_avg))
+
+    dj_40 = row.get("dj_40_rsi")
+    dj_50 = row.get("dj_50_rsi")
+    dj_60 = row.get("dj_60_rsi")
+    has_dj = any(v is not None for v in (dj_40, dj_50, dj_60))
+
+    if has_hop_rsi or has_dj:
+        rsi_el = [section_bar("REACTIVE STRENGTH PROFILE"), Spacer(1, 3)]
+
+        if has_hop_rsi:
+            rsi_rows = [["Test", "Avg RSI", "Avg GCT (s)", "Category"]]
+            for label, avg, gct, cat in [
+                ("Double-Leg Hop",   rsi_dl_avg,   row.get("rsi_double_gct_avg"),      row.get("rsi_double_category")),
+                ("Single-Leg Left",  rsi_sl_l_avg, row.get("rsi_single_left_gct_avg"), row.get("rsi_single_left_category")),
+                ("Single-Leg Right", rsi_sl_r_avg, row.get("rsi_single_right_gct_avg"),row.get("rsi_single_right_category")),
+            ]:
+                if avg is not None:
+                    rsi_rows.append([
+                        label,
+                        sf(avg, ".2f"),
+                        sf(gct, ".3f") if gct is not None else "N/A",
+                        cat or "N/A",
+                    ])
+
+            rsi_el.append(data_table(rsi_rows))
+            rsi_el.append(Spacer(1, 4))
+
+            # Asymmetry line
+            asym_pct  = row.get("rsi_asymmetry_pct")
+            asym_flag = row.get("rsi_asymmetry_flag")
+            asym_side = row.get("rsi_dominant_side")
+            if asym_pct is not None:
+                if asym_flag:
+                    rsi_el.append(Paragraph(
+                        f"<b>Bilateral Asymmetry:</b>  {asym_side or 'Unknown'} dominant  "
+                        f"({sf(asym_pct, '.1f')}%)",
+                        ps("asym_warn", size=9, color=AMBER),
+                    ))
+                else:
+                    rsi_el.append(Paragraph(
+                        f"<b>Bilateral balance:</b>  Within acceptable range  "
+                        f"({sf(asym_pct, '.1f')}% asymmetry)",
+                        ps("asym_ok", size=9, color=MGREY),
+                    ))
+
+            # Power profile type
+            ppt = row.get("power_profile_type")
+            if ppt:
+                rsi_el.append(Paragraph(f"<b>Power profile:</b>  {ppt}", S_BODY))
+
+            rsi_el.append(Spacer(1, 4))
+
+        if has_dj:
+            dj_rows = [["Box Height", "RSI", "Jump Ht (cm)", "GCT (s)"]]
+            optimal = row.get("dj_optimal_height")
+            for h, rsi_val, ht_key, gct_key in [
+                (40, dj_40, "dj_40_jump_ht", "dj_40_gct"),
+                (50, dj_50, "dj_50_jump_ht", "dj_50_gct"),
+                (60, dj_60, "dj_60_jump_ht", "dj_60_gct"),
+            ]:
+                if rsi_val is not None:
+                    label = f"{h} cm {'★' if str(optimal) == str(h) else ''}"
+                    dj_rows.append([
+                        label,
+                        sf(rsi_val, ".2f"),
+                        sf(row.get(ht_key), ".1f") if row.get(ht_key) is not None else "N/A",
+                        sf(row.get(gct_key), ".3f") if row.get(gct_key) is not None else "N/A",
+                    ])
+            rsi_el.append(Paragraph("<b>Drop Jump RSI</b>", ps("dj_hdr", size=9, bold=True)))
+            rsi_el.append(Spacer(1, 2))
+            rsi_el.append(data_table(dj_rows))
+            if optimal and row.get("dj_best_rsi") is not None:
+                dj_cat = row.get("dj_best_category") or ""
+                rsi_el.append(Spacer(1, 3))
+                rsi_el.append(Paragraph(
+                    f"<b>Optimal drop height:</b>  {optimal} cm — "
+                    f"RSI {sf(row.get('dj_best_rsi'), '.2f')}  {('(' + dj_cat + ')') if dj_cat else ''}",
+                    S_BODY,
+                ))
+            rsi_el.append(Spacer(1, 4))
+
+        el.append(KeepTogether(rsi_el))
+
     # ── Performance Radar ─────────────────────────────────────
     radar = build_radar_chart(accel, maxv, power_overall, maint,
                               width_mm=100, height_mm=90)
