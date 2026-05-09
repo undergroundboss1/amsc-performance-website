@@ -76,6 +76,23 @@ def _best_jump(*vals) -> Optional[float]:
     return max(valid) if valid else None
 
 
+def _sprint_field(a1, a2, a3, best) -> Optional[float]:
+    """
+    Pick the best sprint time from attempts first, falling back to the Best
+    column ONLY when at least one attempt was entered.
+
+    This prevents stale formula-cached values in the Best cell from being
+    used when the athlete was never actually tested at that distance.
+    """
+    from_attempts = _best_of(a1, a2, a3)
+    if from_attempts is not None:
+        return from_attempts
+    # Only use the Best column if at least one attempt cell had a value.
+    # If all attempts were blank, Best is a formula cell with a stale cache.
+    has_any_attempt = any(_safe_float(v) is not None for v in (a1, a2, a3))
+    return _safe_float(best) if has_any_attempt else None
+
+
 # ── Sprint Data reader ─────────────────────────────────────────
 
 # Sprint Data has a two-row merged header (rows 5-6 in Excel).
@@ -295,47 +312,18 @@ def _transform_sprint_row(row: pd.Series) -> dict:
     notes  = str(row.get("notes", "")) if pd.notna(row.get("notes")) else ""
 
     # ── Sprint bests ───────────────────────────────────────────
-    # Prefer computed best from attempts; fall back to template's Best column
-    m10 = (
-        _best_of(row.get("m10_a1"), row.get("m10_a2"), row.get("m10_a3"))
-        or _safe_float(row.get("m10_best"))
-    )
-    m20 = (
-        _best_of(row.get("m20_a1"), row.get("m20_a2"), row.get("m20_a3"))
-        or _safe_float(row.get("m20_best"))
-    )
-    m30 = (
-        _best_of(row.get("m30_a1"), row.get("m30_a2"), row.get("m30_a3"))
-        or _safe_float(row.get("m30_best"))
-    )
-    m40 = (
-        _best_of(row.get("m40_a1"), row.get("m40_a2"), row.get("m40_a3"))
-        or _safe_float(row.get("m40_best"))
-    )
-    m60_direct = (
-        _best_of(row.get("m60_a1"), row.get("m60_a2"), row.get("m60_a3"))
-        or _safe_float(row.get("m60_best"))
-    )
-    m80_direct = (
-        _best_of(row.get("m80_a1"), row.get("m80_a2"), row.get("m80_a3"))
-        or _safe_float(row.get("m80_best"))
-    )
-    fly10 = (
-        _best_of(row.get("fly10_a1"), row.get("fly10_a2"), row.get("fly10_a3"))
-        or _safe_float(row.get("fly10_best"))
-    )
-    fly20 = (
-        _best_of(row.get("fly20_a1"), row.get("fly20_a2"), row.get("fly20_a3"))
-        or _safe_float(row.get("fly20_best"))
-    )
-    m100 = (
-        _best_of(row.get("m100_a1"), row.get("m100_a2"), row.get("m100_a3"))
-        or _safe_float(row.get("m100_best"))
-    )
-    pro_agility = (
-        _best_of(row.get("pag_a1"), row.get("pag_a2"), row.get("pag_a3"))
-        or _safe_float(row.get("pag_best"))
-    )
+    # _sprint_field picks the best from attempts; falls back to the Best column
+    # only when at least one attempt was entered (avoids stale formula caches).
+    m10  = _sprint_field(row.get("m10_a1"),   row.get("m10_a2"),   row.get("m10_a3"),   row.get("m10_best"))
+    m20  = _sprint_field(row.get("m20_a1"),   row.get("m20_a2"),   row.get("m20_a3"),   row.get("m20_best"))
+    m30  = _sprint_field(row.get("m30_a1"),   row.get("m30_a2"),   row.get("m30_a3"),   row.get("m30_best"))
+    m40  = _sprint_field(row.get("m40_a1"),   row.get("m40_a2"),   row.get("m40_a3"),   row.get("m40_best"))
+    m60_direct = _sprint_field(row.get("m60_a1"), row.get("m60_a2"), row.get("m60_a3"), row.get("m60_best"))
+    m80_direct = _sprint_field(row.get("m80_a1"), row.get("m80_a2"), row.get("m80_a3"), row.get("m80_best"))
+    fly10 = _sprint_field(row.get("fly10_a1"), row.get("fly10_a2"), row.get("fly10_a3"), row.get("fly10_best"))
+    fly20 = _sprint_field(row.get("fly20_a1"), row.get("fly20_a2"), row.get("fly20_a3"), row.get("fly20_best"))
+    m100  = _sprint_field(row.get("m100_a1"),  row.get("m100_a2"),  row.get("m100_a3"),  row.get("m100_best"))
+    pro_agility = _sprint_field(row.get("pag_a1"), row.get("pag_a2"), row.get("pag_a3"), row.get("pag_best"))
 
     # ── 60m and 80m splits ─────────────────────────────────────
     # Use direct measurements if available; otherwise interpolate from 40m + 100m

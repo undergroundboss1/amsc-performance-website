@@ -70,10 +70,8 @@ def validate_inputs(
     # Required fields — must be present and positive
     if split_0_20 is None or split_0_20 <= 0:
         errors.append("Missing required field: 0-20m split (enter the time in seconds)")
-    if split_0_40 is None or split_0_40 <= 0:
-        errors.append("Missing required field: 0-40m split (enter the time in seconds)")
 
-    # Only check ordering when both required splits are present
+    # Only check ordering for whichever splits are present
     present_splits = []
     if split_0_20 is not None and split_0_20 > 0:
         present_splits.append(("0-20m", split_0_20))
@@ -180,14 +178,14 @@ def _classify_distance(gender: Gender, value: float, thresholds: dict) -> Tier:
 
 def compute_segments(
     split_0_20:  float,
-    split_0_40:  float,
+    split_0_40:  Optional[float],
     split_0_60:  Optional[float],
     split_0_80:  Optional[float],
     split_0_100: Optional[float],
 ) -> Dict[str, Any]:
-    seg_20_40 = split_0_40 - split_0_20
+    seg_20_40 = (split_0_40 - split_0_20) if split_0_40 is not None else None
 
-    seg_40_60  = split_0_60  - split_0_40  if split_0_60  is not None else None
+    seg_40_60  = split_0_60  - split_0_40  if (split_0_60  is not None and split_0_40 is not None) else None
     seg_60_80  = split_0_80  - split_0_60  if (split_0_80 is not None and split_0_60 is not None) else None
     seg_80_100 = split_0_100 - split_0_80  if (split_0_100 is not None and split_0_80 is not None) else None
 
@@ -201,7 +199,7 @@ def compute_segments(
         peak_segment = candidates[peak_zone]
     else:
         peak_zone    = "N/A"
-        peak_segment = seg_20_40
+        peak_segment = None  # no segments available; classify_max_velocity falls back to fly10
 
     return {
         "20_40":                 seg_20_40,
@@ -222,9 +220,14 @@ def classify_acceleration(gender: Gender, split_0_20: float) -> Tier:
 def classify_max_velocity(
     gender:                Gender,
     fly10:                 float,
-    peak_velocity_segment: float,
+    peak_velocity_segment: Optional[float],
 ) -> Tier:
-    fly10_tier   = _classify_time(gender, fly10,                 MAX_VELOCITY)
+    fly10_tier = _classify_time(gender, fly10, MAX_VELOCITY)
+
+    # If no segment data (e.g. 40m not recorded), classify from fly10 alone
+    if peak_velocity_segment is None:
+        return fly10_tier
+
     segment_tier = _classify_time(gender, peak_velocity_segment, MAX_VELOCITY)
 
     if fly10_tier == segment_tier:
