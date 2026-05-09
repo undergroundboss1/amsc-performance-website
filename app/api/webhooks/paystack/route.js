@@ -56,6 +56,7 @@ export async function POST(request) {
 
       const updateFields = {
         payment_status: 'paid',
+        last_paid_at: data.paid_at || new Date().toISOString(),
         notes: `Paystack charge confirmed. Amount: ${data.amount / 100} ${data.currency}. Channel: ${data.channel}. Paid at: ${data.paid_at}`,
       };
 
@@ -67,11 +68,13 @@ export async function POST(request) {
         updateFields.paystack_customer_code = data.customer.customer_code;
       }
 
+      // For card subscriptions, match by reference (set at checkout).
+      // For M-Pesa renewals, the reference changes each month — match by reference only,
+      // no status guard needed since last_paid_at reset resets the reminder clock.
       const { error } = await supabase
         .from('clients')
         .update(updateFields)
-        .eq('payment_reference', reference)
-        .eq('payment_status', 'pending'); // Idempotent — only update if still pending
+        .eq('payment_reference', reference);
 
       if (error) {
         console.error('Paystack webhook: DB update error (charge.success):', error);
