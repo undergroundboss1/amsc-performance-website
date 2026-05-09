@@ -193,27 +193,64 @@ function PaymentContent() {
           </div>
         )}
 
-        {/* Pay Button */}
-        <button
-          type="button"
-          onClick={() => handlePay('paystack')}
-          disabled={paying !== null}
-          className="w-full bg-accent hover:bg-accent/90 text-white font-display font-bold text-base tracking-widest uppercase rounded-xl p-5 transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
-        >
-          {paying === 'paystack' ? (
-            <span className="inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-          ) : (
-            'Pay Now \u2192'
-          )}
-        </button>
+        {/* Payment options */}
+        <div className="space-y-3">
+          {/* Card payment \u2014 recurring subscription */}
+          <button
+            type="button"
+            onClick={() => handlePay('paystack')}
+            disabled={paying !== null}
+            className="w-full bg-accent hover:bg-accent/90 text-white font-display font-bold text-base tracking-widest uppercase rounded-xl p-5 transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+          >
+            {paying === 'paystack' ? (
+              <span className="inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <>
+                <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                </svg>
+                Pay with Card
+              </>
+            )}
+          </button>
+          <p className="text-center text-white/30 text-xs font-body">
+            Auto-renews monthly \u00b7 Cancel anytime
+          </p>
 
-        <p className="text-center text-white/40 text-xs font-body mt-3">
-          Card \u00b7 M-Pesa \u00b7 Auto-renews monthly \u00b7 Cancel anytime
-        </p>
+          {/* Divider */}
+          <div className="flex items-center gap-4 py-1">
+            <div className="flex-1 h-px bg-white/10" />
+            <span className="text-white/30 text-xs font-body">or</span>
+            <div className="flex-1 h-px bg-white/10" />
+          </div>
+
+          {/* M-Pesa \u2014 one-time, manual renewal */}
+          <button
+            type="button"
+            onClick={() => handlePay('mpesa')}
+            disabled={paying !== null}
+            className="w-full bg-surface hover:bg-white/5 text-white border border-white/10 hover:border-white/20 font-display font-bold text-base tracking-widest uppercase rounded-xl p-5 transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+          >
+            {paying === 'mpesa' ? (
+              <span className="inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <>
+                {/* M-Pesa green phone icon */}
+                <svg className="w-5 h-5 shrink-0 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+                Pay with M-Pesa
+              </>
+            )}
+          </button>
+          <p className="text-center text-white/30 text-xs font-body">
+            One-time payment \u00b7 You&apos;ll receive a renewal reminder each month
+          </p>
+        </div>
 
         {/* Security note */}
         <p className="text-center text-secondary text-xs font-body mt-8">
-          Your payment is processed securely. AMSC never stores your card or M-Pesa PIN.
+          Your payment is processed securely by Paystack. AMSC never stores your card or M-Pesa PIN.
         </p>
       </div>
     </section>
