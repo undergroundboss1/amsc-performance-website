@@ -244,6 +244,7 @@ export default function AdminPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState(null);
   const [uploadError, setUploadError] = useState('');
+  const [uploadAthleteErrors, setUploadAthleteErrors] = useState([]);
 
   function handleLogin(password) {
     if (!password.trim()) {
@@ -285,6 +286,7 @@ export default function AdminPage() {
     setUploading(true);
     setUploadResult(null);
     setUploadError('');
+    setUploadAthleteErrors([]);
 
     try {
       const base64 = await new Promise((resolve, reject) => {
@@ -304,7 +306,11 @@ export default function AdminPage() {
       });
 
       const data = await res.json();
-      if (!res.ok) { setUploadError(data.error || 'Upload failed.'); return; }
+      if (!res.ok) {
+        setUploadError(data.error || 'Upload failed.');
+        setUploadAthleteErrors(data.errors || []);
+        return;
+      }
       setUploadResult(data);
       setUploadFile(null);
       const fileInput = document.getElementById('excel-upload');
@@ -489,7 +495,16 @@ export default function AdminPage() {
 
               {uploadError && (
                 <div className="bg-red-900/20 border border-red-500/20 rounded-lg px-4 py-3 mb-6">
-                  <p className="text-red-400 text-sm font-body">{uploadError}</p>
+                  <p className="text-red-400 text-sm font-body font-semibold">{uploadError}</p>
+                  {uploadAthleteErrors.length > 0 && (
+                    <ul className="mt-2 space-y-1">
+                      {uploadAthleteErrors.map((e, i) => (
+                        <li key={i} className="text-red-300 text-xs font-body">
+                          <span className="font-semibold">{e.name}:</span> {e.error}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               )}
 

@@ -56,8 +56,8 @@ SPEED_MAINT_THRESHOLDS = SpeedMaintenanceThresholds(
 
 def validate_inputs(
     name:        str,
-    split_0_20:  float,
-    split_0_40:  float,
+    split_0_20:  Optional[float],
+    split_0_40:  Optional[float],
     split_0_60:  Optional[float],
     split_0_80:  Optional[float],
     split_0_100: Optional[float],
@@ -67,10 +67,18 @@ def validate_inputs(
 ) -> List[str]:
     errors = []
 
-    present_splits = [
-        ("0-20m",  split_0_20),
-        ("0-40m",  split_0_40),
-    ]
+    # Required fields — must be present and positive
+    if split_0_20 is None or split_0_20 <= 0:
+        errors.append("Missing required field: 0-20m split (enter the time in seconds)")
+    if split_0_40 is None or split_0_40 <= 0:
+        errors.append("Missing required field: 0-40m split (enter the time in seconds)")
+
+    # Only check ordering when both required splits are present
+    present_splits = []
+    if split_0_20 is not None and split_0_20 > 0:
+        present_splits.append(("0-20m", split_0_20))
+    if split_0_40 is not None and split_0_40 > 0:
+        present_splits.append(("0-40m", split_0_40))
     if split_0_60 is not None:
         present_splits.append(("0-60m", split_0_60))
     if split_0_80 is not None:
@@ -86,8 +94,8 @@ def validate_inputs(
                 f"{present_splits[i+1][0]} ({present_splits[i+1][1]:.2f}s)"
             )
 
-    if fly10 <= 0:
-        errors.append(f"Fly10 must be a positive number, got {fly10}")
+    if fly10 is None or fly10 <= 0:
+        errors.append(f"Missing required field: Fly-10 time (enter the time in seconds)")
 
     if cmj_cm is not None and not (20 <= cmj_cm <= 120):
         errors.append(f"CMJ ({cmj_cm}cm) is outside realistic range (20–120cm)")
@@ -394,12 +402,12 @@ def evaluate_athlete(
     gender:      Gender,
     sport:       str,
     date:        str,
-    split_0_20:  float,
-    split_0_40:  float,
+    split_0_20:  Optional[float] = None,
+    split_0_40:  Optional[float] = None,
     split_0_60:  Optional[float] = None,
     split_0_80:  Optional[float] = None,
     split_0_100: Optional[float] = None,
-    fly10:       float = 0.0,
+    fly10:       Optional[float] = None,
     cmj_cm:      Optional[float] = None,
     broad_cm:    Optional[float] = None,
     # RSI — all optional; if None the metric is skipped
@@ -572,13 +580,13 @@ def evaluate_batch(df: pd.DataFrame) -> tuple:
                 sport       = str(row["sport"]),
                 date        = str(row.get("date", "")),
                 split_0_10  = _opt(row, "split_0_10"),
-                split_0_20  = float(row["split_0_20"]),
+                split_0_20  = _opt(row, "split_0_20"),
                 split_0_30  = _opt(row, "split_0_30"),
-                split_0_40  = float(row["split_0_40"]),
+                split_0_40  = _opt(row, "split_0_40"),
                 split_0_60  = _opt(row, "split_0_60"),
                 split_0_80  = _opt(row, "split_0_80"),
                 split_0_100 = _opt(row, "split_0_100"),
-                fly10       = float(row["fly10"]),
+                fly10       = _opt(row, "fly10"),
                 fly20       = _opt(row, "fly20"),
                 pro_agility = _opt(row, "pro_agility"),
                 cmj_cm      = _opt(row, "cmj_cm"),
