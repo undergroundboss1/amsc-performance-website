@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import * as Sentry from '@sentry/nextjs';
 import { getSupabase } from '../../../../lib/supabase';
+import { getPlanById } from '../../../../lib/plans';
+import { sendEmail, buildOnboardingEmail } from '../../../../lib/email';
 
 /**
  * POST /api/webhooks/paystack
@@ -78,6 +80,44 @@ export async function POST(request) {
 
       if (error) {
         console.error('Paystack webhook: DB update error (charge.success):', error);
+      }
+
+      // Send onboarding email on first payment only
+      try {
+        const { data: client } = await supabase
+          .from('clients')
+          .select('full_name, email, selected_plan, payment_provider, onboarding_email_sent_at')
+          .eq('payment_reference', reference)
+          .single();
+
+        if (client && !client.onboarding_email_sent_at) {
+          const plan = getPlanById(client.selected_plan);
+          const ismpesa = client.payment_provider === 'paystack_mpesa';
+
+          const result = await sendEmail({
+            to: client.email,
+            subject: `Welcome to AMSC — you're officially in`,
+            html: buildOnboardingEmail({
+              fullName: client.full_name,
+              planName: plan?.name || client.selected_plan,
+              planPrice: plan?.displayPrice || 'KES —',
+              paymentMethod: ismpesa ? 'mpesa' : 'card',
+            }),
+          });
+
+          if (result.ok) {
+            await supabase
+              .from('clients')
+              .update({ onboarding_email_sent_at: new Date().toISOString() })
+              .eq('payment_reference', reference);
+            console.log(`Onboarding email sent to ${client.email}`);
+          } else {
+            console.error('Onboarding email failed:', result.error);
+          }
+        }
+      } catch (emailErr) {
+        // Never let email failure break webhook response
+        console.error('Onboarding email error:', emailErr);
       }
 
       console.log(`Paystack charge confirmed: ${reference}`);

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabase } from '../../../../lib/supabase';
 import { getPlanById } from '../../../../lib/plans';
+import { sendEmail, buildPaymentReminderEmail } from '../../../../lib/email';
 
 /**
  * GET /api/cron/payment-reminders
@@ -56,23 +57,19 @@ export async function GET(request) {
     const planPrice = plan?.displayPrice || 'KES —';
 
     try {
-      const emailRes = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-        },
-        body: JSON.stringify({
-          from: 'AMSC Performance <billing@amscperformance.com>',
-          to: [client.email],
-          subject: `Your AMSC subscription payment is due — ${planPrice}`,
-          html: buildReminderEmail({ client, planName, planPrice, paymentUrl }),
+      const result = await sendEmail({
+        to: client.email,
+        subject: `Your AMSC subscription payment is due — ${planPrice}`,
+        html: buildPaymentReminderEmail({
+          fullName: client.full_name,
+          planName,
+          planPrice,
+          paymentUrl,
         }),
       });
 
-      if (!emailRes.ok) {
-        const err = await emailRes.json();
-        throw new Error(JSON.stringify(err));
+      if (!result.ok) {
+        throw new Error(result.error);
       }
 
       // Mark reminder sent
@@ -92,89 +89,4 @@ export async function GET(request) {
 
   console.log(`Payment reminders: ${results.sent} sent, ${results.failed} failed`);
   return NextResponse.json(results);
-}
-
-function buildReminderEmail({ client, planName, planPrice, paymentUrl }) {
-  const firstName = client.full_name.split(' ')[0];
-
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AMSC Payment Reminder</title>
-</head>
-<body style="margin:0;padding:0;background:#000000;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#000000;padding:40px 20px;">
-    <tr>
-      <td align="center">
-        <table width="560" cellpadding="0" cellspacing="0" style="background:#111111;border:1px solid #222222;border-radius:12px;overflow:hidden;max-width:560px;width:100%;">
-
-          <!-- Header -->
-          <tr>
-            <td style="background:#a60a08;padding:28px 36px;">
-              <p style="margin:0;color:#ffffff;font-size:11px;font-weight:700;letter-spacing:0.25em;text-transform:uppercase;">
-                AMSC PERFORMANCE
-              </p>
-            </td>
-          </tr>
-
-          <!-- Body -->
-          <tr>
-            <td style="padding:36px 36px 28px;">
-              <h1 style="margin:0 0 16px;color:#f5f5f8;font-size:22px;font-weight:800;letter-spacing:0.05em;text-transform:uppercase;">
-                Monthly Payment Due
-              </h1>
-              <p style="margin:0 0 24px;color:#d3d3d3;font-size:15px;line-height:1.6;">
-                Hi ${firstName},
-              </p>
-              <p style="margin:0 0 24px;color:#d3d3d3;font-size:15px;line-height:1.6;">
-                Your monthly AMSC subscription payment is due. Complete your payment below to keep your training uninterrupted.
-              </p>
-
-              <!-- Plan summary -->
-              <table width="100%" cellpadding="0" cellspacing="0" style="background:#1a1a1a;border:1px solid #222222;border-radius:8px;margin-bottom:28px;">
-                <tr>
-                  <td style="padding:20px 24px;">
-                    <p style="margin:0 0 4px;color:#888888;font-size:11px;font-weight:600;letter-spacing:0.15em;text-transform:uppercase;">Your Plan</p>
-                    <p style="margin:0 0 16px;color:#f5f5f8;font-size:16px;font-weight:700;">${planName}</p>
-                    <p style="margin:0 0 4px;color:#888888;font-size:11px;font-weight:600;letter-spacing:0.15em;text-transform:uppercase;">Amount Due</p>
-                    <p style="margin:0;color:#a60a08;font-size:22px;font-weight:800;">${planPrice}</p>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- CTA -->
-              <table cellpadding="0" cellspacing="0" width="100%">
-                <tr>
-                  <td align="center">
-                    <a href="${paymentUrl}"
-                       style="display:inline-block;background:#a60a08;color:#ffffff;font-size:13px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;text-decoration:none;padding:16px 36px;border-radius:8px;">
-                      Pay Now via M-Pesa →
-                    </a>
-                  </td>
-                </tr>
-              </table>
-
-              <p style="margin:28px 0 0;color:#555555;font-size:13px;line-height:1.6;">
-                If you have any questions, reply to this email or reach out to us on Instagram.
-              </p>
-            </td>
-          </tr>
-
-          <!-- Footer -->
-          <tr>
-            <td style="padding:20px 36px;border-top:1px solid #222222;">
-              <p style="margin:0;color:#444444;font-size:11px;text-align:center;">
-                AMSC Performance · Nairobi, Kenya · amscperformance.com
-              </p>
-            </td>
-          </tr>
-
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
 }
