@@ -5,6 +5,7 @@ expected by the performance engine.
 Expected template structure:
   Sheet 1 — "Sprint Data": two-row header (rows 5-6), data from row 7
   Sheet 2 — "Jump Data":   single header row (row 4), data from row 5
+  Sheet 3 — "RSI Data":    three-row header (rows 1-3), data from row 4
 
 Column layout (Sprint Data) — read by position, not name:
   Col 0:  Athlete Name
@@ -74,6 +75,12 @@ def _best_jump(*vals) -> Optional[float]:
     """Return the maximum (best) of any valid jump distances provided."""
     valid = [v for v in (_safe_float(v) for v in vals) if v is not None]
     return max(valid) if valid else None
+
+
+def _avg_of(*vals) -> Optional[float]:
+    """Return the average of any valid float values provided."""
+    valid = [v for v in (_safe_float(v) for v in vals) if v is not None]
+    return round(sum(valid) / len(valid), 4) if valid else None
 
 
 def _sprint_field(a1, a2, a3, best) -> Optional[float]:
@@ -199,45 +206,58 @@ def _read_jump_sheet(file) -> pd.DataFrame:
 
 
 # ── RSI Data reader ───────────────────────────────────────────
-# RSI sheet: two-row header (rows 3-4 in Excel), data from row 5.
-# Each athlete has 12 summary values — 4 per leg (DL, SL Left, SL Right):
-#   Avg RSI, Avg GCT (s), Max RSI, Max GCT (s)
-#
+# RSI sheet: three-row header (rows 1-3 in Excel), data from row 4.
+# Athletes enter up to 3 hop attempts per leg; engine computes avg/best.
+
+RSI_SKIPROWS = 3   # skip rows 1 (title), 2 (group headers), 3 (column labels)
+
 # Column layout (0-indexed):
 #   0         = Athlete Name
-#   1-4       = Double-Leg:       Avg RSI, Avg GCT, Max RSI, Max GCT
-#   5-8       = Single-Leg Left:  Avg RSI, Avg GCT, Max RSI, Max GCT
-#   9-12      = Single-Leg Right: Avg RSI, Avg GCT, Max RSI, Max GCT
-
-RSI_SKIPROWS = 3   # skip rows 1 (title), 2 (instructions), 3 (group headers)
-
+#   1-3       = Double-Leg RSI:      A1, A2, A3
+#   4-6       = Double-Leg GCT:      A1, A2, A3
+#   7-9       = Single-Leg Left RSI: A1, A2, A3
+#   10-12     = Single-Leg Left GCT: A1, A2, A3
+#   13-15     = Single-Leg Right RSI: A1, A2, A3
+#   16-18     = Single-Leg Right GCT: A1, A2, A3
+#   19-21     = Drop Jump 40cm: RSI, Jump Ht (cm), GCT (s)
+#   22-24     = Drop Jump 50cm: RSI, Jump Ht (cm), GCT (s)
+#   25-27     = Drop Jump 60cm: RSI, Jump Ht (cm), GCT (s)
 RSI_COLS = {
-    "name":                   0,
-    # Double-leg
-    "rsi_double_avg":         1,
-    "rsi_double_gct_avg":     2,
-    "rsi_double_best":        3,
-    "rsi_double_max_gct":     4,
-    # Single-leg left
-    "rsi_single_left_avg":    5,
-    "rsi_single_left_gct_avg": 6,
-    "rsi_single_left_best":   7,
-    "rsi_single_left_max_gct": 8,
-    # Single-leg right
-    "rsi_single_right_avg":   9,
-    "rsi_single_right_gct_avg": 10,
-    "rsi_single_right_best":  11,
-    "rsi_single_right_max_gct": 12,
-    # Drop jump — 40 cm / 50 cm / 60 cm box heights
-    "dj_40_rsi":              13,
-    "dj_40_jump_ht":          14,
-    "dj_40_gct":              15,
-    "dj_50_rsi":              16,
-    "dj_50_jump_ht":          17,
-    "dj_50_gct":              18,
-    "dj_60_rsi":              19,
-    "dj_60_jump_ht":          20,
-    "dj_60_gct":              21,
+    "name":                  0,
+    # Double-leg RSI attempts
+    "rsi_double_a1":         1,
+    "rsi_double_a2":         2,
+    "rsi_double_a3":         3,
+    # Double-leg GCT attempts
+    "rsi_double_gct_a1":     4,
+    "rsi_double_gct_a2":     5,
+    "rsi_double_gct_a3":     6,
+    # Single-leg left RSI attempts
+    "rsi_sl_left_a1":        7,
+    "rsi_sl_left_a2":        8,
+    "rsi_sl_left_a3":        9,
+    # Single-leg left GCT attempts
+    "rsi_sl_left_gct_a1":   10,
+    "rsi_sl_left_gct_a2":   11,
+    "rsi_sl_left_gct_a3":   12,
+    # Single-leg right RSI attempts
+    "rsi_sl_right_a1":      13,
+    "rsi_sl_right_a2":      14,
+    "rsi_sl_right_a3":      15,
+    # Single-leg right GCT attempts
+    "rsi_sl_right_gct_a1":  16,
+    "rsi_sl_right_gct_a2":  17,
+    "rsi_sl_right_gct_a3":  18,
+    # Drop jump — 40 cm / 50 cm / 60 cm box heights (unchanged)
+    "dj_40_rsi":            19,
+    "dj_40_jump_ht":        20,
+    "dj_40_gct":            21,
+    "dj_50_rsi":            22,
+    "dj_50_jump_ht":        23,
+    "dj_50_gct":            24,
+    "dj_60_rsi":            25,
+    "dj_60_jump_ht":        26,
+    "dj_60_gct":            27,
 }
 
 
@@ -264,33 +284,45 @@ def _read_rsi_sheet(file) -> Optional[pd.DataFrame]:
 
 def _transform_rsi_row(row: pd.Series) -> dict:
     """
-    Transform one RSI summary row into engine-ready fields.
-    Values come in directly — no per-hop calculation needed.
-    Returns all RSI fields keyed by normalised athlete name.
+    Transform one RSI row (A1/A2/A3 attempt columns) into engine-ready fields.
+    Avg and best are computed from whatever attempts are filled — works with
+    1, 2, or 3 attempts per leg.  _best_jump() returns the max (higher RSI = better).
     """
     name = str(row.get("name", "")).strip().lower()
 
+    dl_rsi_avg  = _avg_of(row.get("rsi_double_a1"), row.get("rsi_double_a2"), row.get("rsi_double_a3"))
+    dl_rsi_best = _best_jump(row.get("rsi_double_a1"), row.get("rsi_double_a2"), row.get("rsi_double_a3"))
+    dl_gct_avg  = _avg_of(row.get("rsi_double_gct_a1"), row.get("rsi_double_gct_a2"), row.get("rsi_double_gct_a3"))
+
+    sl_l_rsi_avg  = _avg_of(row.get("rsi_sl_left_a1"), row.get("rsi_sl_left_a2"), row.get("rsi_sl_left_a3"))
+    sl_l_rsi_best = _best_jump(row.get("rsi_sl_left_a1"), row.get("rsi_sl_left_a2"), row.get("rsi_sl_left_a3"))
+    sl_l_gct_avg  = _avg_of(row.get("rsi_sl_left_gct_a1"), row.get("rsi_sl_left_gct_a2"), row.get("rsi_sl_left_gct_a3"))
+
+    sl_r_rsi_avg  = _avg_of(row.get("rsi_sl_right_a1"), row.get("rsi_sl_right_a2"), row.get("rsi_sl_right_a3"))
+    sl_r_rsi_best = _best_jump(row.get("rsi_sl_right_a1"), row.get("rsi_sl_right_a2"), row.get("rsi_sl_right_a3"))
+    sl_r_gct_avg  = _avg_of(row.get("rsi_sl_right_gct_a1"), row.get("rsi_sl_right_gct_a2"), row.get("rsi_sl_right_gct_a3"))
+
     return {
         "name_key":                 name,
-        "rsi_double_avg":           _safe_float(row.get("rsi_double_avg")),
-        "rsi_double_best":          _safe_float(row.get("rsi_double_best")),
-        "rsi_double_gct_avg":       _safe_float(row.get("rsi_double_gct_avg")),
-        "rsi_single_left_avg":      _safe_float(row.get("rsi_single_left_avg")),
-        "rsi_single_left_best":     _safe_float(row.get("rsi_single_left_best")),
-        "rsi_single_left_gct_avg":  _safe_float(row.get("rsi_single_left_gct_avg")),
-        "rsi_single_right_avg":     _safe_float(row.get("rsi_single_right_avg")),
-        "rsi_single_right_best":    _safe_float(row.get("rsi_single_right_best")),
-        "rsi_single_right_gct_avg": _safe_float(row.get("rsi_single_right_gct_avg")),
-        # Drop jump
-        "dj_40_rsi":                _safe_float(row.get("dj_40_rsi")),
-        "dj_40_jump_ht":            _safe_float(row.get("dj_40_jump_ht")),
-        "dj_40_gct":                _safe_float(row.get("dj_40_gct")),
-        "dj_50_rsi":                _safe_float(row.get("dj_50_rsi")),
-        "dj_50_jump_ht":            _safe_float(row.get("dj_50_jump_ht")),
-        "dj_50_gct":                _safe_float(row.get("dj_50_gct")),
-        "dj_60_rsi":                _safe_float(row.get("dj_60_rsi")),
-        "dj_60_jump_ht":            _safe_float(row.get("dj_60_jump_ht")),
-        "dj_60_gct":                _safe_float(row.get("dj_60_gct")),
+        "rsi_double_avg":           dl_rsi_avg,
+        "rsi_double_best":          dl_rsi_best,
+        "rsi_double_gct_avg":       dl_gct_avg,
+        "rsi_single_left_avg":      sl_l_rsi_avg,
+        "rsi_single_left_best":     sl_l_rsi_best,
+        "rsi_single_left_gct_avg":  sl_l_gct_avg,
+        "rsi_single_right_avg":     sl_r_rsi_avg,
+        "rsi_single_right_best":    sl_r_rsi_best,
+        "rsi_single_right_gct_avg": sl_r_gct_avg,
+        # Drop jump — one value per height, no attempt columns
+        "dj_40_rsi":     _safe_float(row.get("dj_40_rsi")),
+        "dj_40_jump_ht": _safe_float(row.get("dj_40_jump_ht")),
+        "dj_40_gct":     _safe_float(row.get("dj_40_gct")),
+        "dj_50_rsi":     _safe_float(row.get("dj_50_rsi")),
+        "dj_50_jump_ht": _safe_float(row.get("dj_50_jump_ht")),
+        "dj_50_gct":     _safe_float(row.get("dj_50_gct")),
+        "dj_60_rsi":     _safe_float(row.get("dj_60_rsi")),
+        "dj_60_jump_ht": _safe_float(row.get("dj_60_jump_ht")),
+        "dj_60_gct":     _safe_float(row.get("dj_60_gct")),
     }
 
 
