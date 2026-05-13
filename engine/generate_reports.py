@@ -18,11 +18,39 @@ from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer,
     Table, TableStyle, KeepTogether, Image,
 )
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 
 from engine.settings import PATHS, BRAND
 
 import os
 ENGINE_MODE = os.getenv("AMSC_ENGINE_MODE", "local")
+
+# ── AMSC Font Registration ────────────────────────────────────
+_FONTS_DIR = Path(__file__).resolve().parent / "assets" / "fonts"
+
+def _reg(name: str, filename: str):
+    """Register a TTFont, silently skip if the file is missing."""
+    path = _FONTS_DIR / filename
+    if path.exists():
+        pdfmetrics.registerFont(TTFont(name, str(path)))
+        return True
+    return False
+
+_fonts_ok = all([
+    _reg("Oswald-Bold",      "Oswald-Bold.ttf"),
+    _reg("Antonio-Bold",     "Antonio-Bold.ttf"),
+    _reg("Antonio-Regular",  "Antonio-Regular.ttf"),
+    _reg("Barlow-Medium",    "Barlow-Medium.ttf"),
+    _reg("Barlow-Bold",      "Barlow-Bold.ttf"),
+])
+
+# Font name aliases used throughout the file
+_F_HEADLINE = "Oswald-Bold"      if _fonts_ok else "Helvetica-Bold"
+_F_METRIC   = "Antonio-Bold"     if _fonts_ok else "Helvetica-Bold"
+_F_METRIC_R = "Antonio-Regular"  if _fonts_ok else "Helvetica"
+_F_BODY     = "Barlow-Medium"    if _fonts_ok else "Helvetica"
+_F_BOLD     = "Barlow-Bold"      if _fonts_ok else "Helvetica-Bold"
 
 OUTPUT_DIR  = PATHS["reports_dir"]
 MASTER_XLSX = PATHS["output_xlsx"]
@@ -165,10 +193,16 @@ def _cropped_logo_path(src: Path) -> Path:
 
 # ── Paragraph styles ──────────────────────────────────────────
 
-def ps(name, size=9, bold=False, color=BLACK, leading=None, sb=0, sa=3, align=0):
+def ps(name, size=9, bold=False, color=BLACK, leading=None, sb=0, sa=3, align=0,
+       font=None):
+    """
+    font override: pass a font alias like _F_HEADLINE, _F_METRIC, etc.
+    Defaults to Barlow-Medium (body) or Barlow-Bold (bold).
+    """
+    chosen = font or (_F_BOLD if bold else _F_BODY)
     return ParagraphStyle(
         name,
-        fontName="Helvetica-Bold" if bold else "Helvetica",
+        fontName=chosen,
         fontSize=size,
         leading=leading or size * 1.45,
         textColor=color,
@@ -177,16 +211,16 @@ def ps(name, size=9, bold=False, color=BLACK, leading=None, sb=0, sa=3, align=0)
         alignment=align,
     )
 
-S_ORG_HDR  = ps("OrgHdr",  size=20, bold=True,  color=BLACK,  sa=0)
-S_TITLE    = ps("Title",   size=10, color=MGREY, sa=1)
-S_EDITION  = ps("Edition", size=10, color=MGREY, sa=0)
-S_SECTION  = ps("Sec",     size=10, bold=True,  color=WHITE,  sa=0)
-S_BODY     = ps("Body",    size=10, color=DGREY, sa=3)
-S_MISSING  = ps("Missing", size=9,  color=AMBER, sa=2, bold=True)
-S_IMBAL    = ps("Imbal",   size=10, bold=True,  color=BLACK,  sa=0)
-S_PEAK     = ps("Peak",    size=9,  bold=True,  color=DGREY,  sa=2, align=1)
-S_ATHL_LBL = ps("AthlLbl", size=9,  bold=True, color=WHITE,  sa=0, align=1)
-S_ATHL_VAL = ps("AthlVal", size=10, color=BLACK, sa=0, align=1)
+S_ORG_HDR  = ps("OrgHdr",  size=20, font=_F_HEADLINE, color=BLACK,  sa=0)
+S_TITLE    = ps("Title",   size=10, font=_F_BODY,     color=MGREY,  sa=1)
+S_EDITION  = ps("Edition", size=10, font=_F_BODY,     color=MGREY,  sa=0)
+S_SECTION  = ps("Sec",     size=10, font=_F_HEADLINE, color=WHITE,  sa=0)
+S_BODY     = ps("Body",    size=10, font=_F_BODY,     color=DGREY,  sa=3)
+S_MISSING  = ps("Missing", size=9,  font=_F_BOLD,     color=AMBER,  sa=2)
+S_IMBAL    = ps("Imbal",   size=10, font=_F_BOLD,     color=BLACK,  sa=0)
+S_PEAK     = ps("Peak",    size=9,  font=_F_BOLD,     color=DGREY,  sa=2, align=1)
+S_ATHL_LBL = ps("AthlLbl", size=9,  font=_F_BOLD,    color=WHITE,  sa=0, align=1)
+S_ATHL_VAL = ps("AthlVal", size=10, font=_F_METRIC_R, color=BLACK,  sa=0, align=1)
 
 
 # ── Chart builders ────────────────────────────────────────────
@@ -421,8 +455,8 @@ def data_table(rows):
     cw = [CONTENT_W * 0.62, CONTENT_W * 0.38]
     t  = Table(rows, colWidths=cw)
     t.setStyle(TableStyle([
-        ("FONTNAME",       (0, 0), (-1,  0), "Helvetica-Bold"),
-        ("FONTNAME",       (0, 1), (-1, -1), "Helvetica"),
+        ("FONTNAME",       (0, 0), (-1,  0), _F_HEADLINE),
+        ("FONTNAME",       (0, 1), (-1, -1), _F_METRIC_R),
         ("FONTSIZE",       (0, 0), (-1, -1), 9),
         ("TEXTCOLOR",      (0, 0), (-1,  0), WHITE),
         ("BACKGROUND",     (0, 0), (-1,  0), BLACK),
@@ -441,8 +475,8 @@ def rsi_data_table(rows):
     cw = [CONTENT_W * 0.36, CONTENT_W * 0.20, CONTENT_W * 0.22, CONTENT_W * 0.22]
     t  = Table(rows, colWidths=cw)
     t.setStyle(TableStyle([
-        ("FONTNAME",       (0, 0), (-1,  0), "Helvetica-Bold"),
-        ("FONTNAME",       (0, 1), (-1, -1), "Helvetica"),
+        ("FONTNAME",       (0, 0), (-1,  0), _F_HEADLINE),
+        ("FONTNAME",       (0, 1), (-1, -1), _F_METRIC_R),
         ("FONTSIZE",       (0, 0), (-1, -1), 9),
         ("TEXTCOLOR",      (0, 0), (-1,  0), WHITE),
         ("BACKGROUND",     (0, 0), (-1,  0), BLACK),
@@ -492,7 +526,7 @@ def scorecard_table(
     cw = [CONTENT_W * 0.62, CONTENT_W * 0.38]
     t  = Table(rows, colWidths=cw)
     cmds = [
-        ("FONTNAME",      (0, 0), (-1,  0), "Helvetica-Bold"),
+        ("FONTNAME",      (0, 0), (-1,  0), _F_HEADLINE),
         ("FONTSIZE",      (0, 0), (-1, -1), 10),
         ("TEXTCOLOR",     (0, 0), (-1,  0), WHITE),
         ("BACKGROUND",    (0, 0), (-1,  0), BLACK),
@@ -506,10 +540,10 @@ def scorecard_table(
         cmds += [
             ("BACKGROUND", (0, i), (0, i), WHITE),
             ("TEXTCOLOR",  (0, i), (0, i), DGREY),
-            ("FONTNAME",   (0, i), (0, i), "Helvetica"),
+            ("FONTNAME",   (0, i), (0, i), _F_BODY),
             ("BACKGROUND", (1, i), (1, i), bg),
             ("TEXTCOLOR",  (1, i), (1, i), clr),
-            ("FONTNAME",   (1, i), (1, i), "Helvetica-Bold"),
+            ("FONTNAME",   (1, i), (1, i), _F_BOLD),
         ]
     t.setStyle(TableStyle(cmds))
     return t
@@ -527,11 +561,11 @@ def score_box(score: int):
         colors.HexColor("#FFEBEE")
     )
     label_style = ParagraphStyle(
-        "ScoreLabel", fontName="Helvetica", fontSize=8,
+        "ScoreLabel", fontName=_F_BODY, fontSize=8,
         textColor=MGREY, alignment=1, spaceAfter=1,
     )
     value_style = ParagraphStyle(
-        "ScoreValue", fontName="Helvetica-Bold", fontSize=24,
+        "ScoreValue", fontName=_F_METRIC, fontSize=24,
         textColor=colour, alignment=1, spaceAfter=0,
     )
     t = Table([
@@ -585,16 +619,16 @@ def draw_chrome(canv, doc, name, sport):
     canv.setFillColor(RED)
     canv.rect(0, PAGE_H - 9 * mm, PAGE_W, 9 * mm, fill=1, stroke=0)
     canv.setFillColor(WHITE)
-    canv.setFont("Helvetica-Bold", 10)
+    canv.setFont(_F_HEADLINE, 10)
     canv.drawString(L_MAR, PAGE_H - 6.2 * mm, "AMSC COMBINE")
-    canv.setFont("Helvetica", 8)
+    canv.setFont(_F_BODY, 8)
     canv.drawRightString(PAGE_W - R_MAR, PAGE_H - 6.2 * mm,
                          f"{name}  |  {sport}")
     canv.setStrokeColor(RED)
     canv.setLineWidth(0.8)
     canv.line(L_MAR, B_MAR + 3 * mm, PAGE_W - R_MAR, B_MAR + 3 * mm)
     canv.setFillColor(BLACK)
-    canv.setFont("Helvetica", 7)
+    canv.setFont(_F_BODY, 7)
     canv.drawCentredString(PAGE_W / 2, B_MAR, FOOTER_TEXT)
     canv.restoreState()
 
@@ -875,6 +909,185 @@ def _sprint_insight_paragraphs(row: pd.Series) -> list:
     return paras
 
 
+# ── Jump insight builder ──────────────────────────────────────
+
+def _jump_insight_paragraphs(row: pd.Series) -> list:
+    """
+    Return a list of Paragraph elements with rich, data-driven jump insights
+    and specific actionable training recommendations for the Power Profile section.
+    """
+    paras = []
+    gender = str(row.get("gender", "male")).lower()
+
+    cmj_raw   = row.get("cmj_cm")
+    broad_raw = row.get("broad_cm")
+    accel     = row.get("acceleration_category") or ""
+    maxv      = row.get("max_velocity_category")  or ""
+    power_cat = row.get("power_category")
+
+    # Nothing to interpret
+    if cmj_raw is None and broad_raw is None:
+        paras.append(Paragraph(
+            "Jump data not collected — power profile cannot be evaluated this session.",
+            ps("jump_na", size=9, color=MGREY),
+        ))
+        return paras
+
+    # Thresholds
+    _cmj_adv  = {"male": 50, "female": 40}.get(gender, 50)
+    _cmj_comp = {"male": 40, "female": 32}.get(gender, 40)
+    _bj_adv   = {"male": 250, "female": 200}.get(gender, 250)
+    _bj_comp  = {"male": 220, "female": 175}.get(gender, 220)
+
+    tier = {"Advanced": 3, "Competitive": 2, "Developing": 1}
+    cmj_cat = None
+    bj_cat  = None
+
+    # ── A — CMJ insight ─────────────────────────────────────────
+    if cmj_raw is not None:
+        cmj_v   = float(cmj_raw)
+        cmj_in  = round(cmj_v / 2.54, 1)
+        if cmj_v >= _cmj_adv:
+            cmj_cat = "Advanced"
+            benchmark = f"above the Advanced threshold ({_cmj_adv} cm / {round(_cmj_adv/2.54,1)} in)"
+        elif cmj_v >= _cmj_comp:
+            cmj_cat = "Competitive"
+            gap_adv = round(_cmj_adv - cmj_v, 1)
+            benchmark = f"within the Competitive range — {gap_adv} cm from Advanced"
+        else:
+            cmj_cat = "Developing"
+            gap_comp = round(_cmj_comp - cmj_v, 1)
+            benchmark = f"below Competitive threshold — {gap_comp} cm from Competitive, {round(_cmj_adv - cmj_v, 1)} cm from Advanced"
+
+        paras.append(Paragraph(
+            f"<b>CMJ — {cmj_cat}:</b>  {cmj_in} in ({cmj_v:.0f} cm), {benchmark}. "
+            f"This reflects concentric explosive output and elastic energy utilisation in the stretch-shortening cycle.",
+            ps("jump_cmj", size=9, color=DGREY),
+        ))
+        paras.append(Spacer(1, 3))
+
+    # ── B — Broad Jump insight ───────────────────────────────────
+    if broad_raw is not None:
+        bj_v = float(broad_raw)
+        if bj_v >= _bj_adv:
+            bj_cat = "Advanced"
+            benchmark = f"above the Advanced threshold ({_bj_adv} cm)"
+        elif bj_v >= _bj_comp:
+            bj_cat = "Competitive"
+            gap_adv = round(_bj_adv - bj_v, 0)
+            benchmark = f"within the Competitive range — {gap_adv:.0f} cm from Advanced"
+        else:
+            bj_cat = "Developing"
+            gap_comp = round(_bj_comp - bj_v, 0)
+            benchmark = f"below Competitive — {gap_comp:.0f} cm from Competitive"
+
+        paras.append(Paragraph(
+            f"<b>Broad Jump — {bj_cat}:</b>  {bj_v:.0f} cm, {benchmark}. "
+            f"Horizontal force application reflects the ability to project mass forward — directly linked to first-step acceleration.",
+            ps("jump_bj", size=9, color=DGREY),
+        ))
+        paras.append(Spacer(1, 3))
+
+    # ── C — CMJ vs Broad Jump cross-reference ────────────────────
+    if cmj_cat and bj_cat:
+        cmj_t = tier.get(cmj_cat, 1)
+        bj_t  = tier.get(bj_cat,  1)
+        if cmj_t > bj_t:
+            cross = (
+                "Vertical output (CMJ) outperforms horizontal projection (Broad Jump). "
+                "Elastic strength is developed — focus on converting vertical force into horizontal application "
+                "through resisted broad jumps and horizontal plyometric complexes."
+            )
+        elif bj_t > cmj_t:
+            cross = (
+                "Horizontal force application (Broad Jump) outperforms vertical elastic output (CMJ). "
+                "Underlying leg drive is strong — structured drop jump and CMJ progressions will convert "
+                "this into vertical power and reactive strength."
+            )
+        else:
+            cross = (
+                "Vertical and horizontal power outputs are balanced — a well-rounded force production profile. "
+                "Training should develop both qualities in parallel to maintain this balance as intensity increases."
+            )
+        paras.append(Paragraph(
+            f"<b>Power balance:</b>  {cross}",
+            ps("jump_cross", size=9, color=DGREY),
+        ))
+        paras.append(Spacer(1, 3))
+
+    # ── D — Power–Sprint linkage ─────────────────────────────────
+    accel_t = tier.get(accel, 0)
+    maxv_t  = tier.get(maxv,  0)
+    power_t = tier.get(power_cat, 0) if power_cat else 0
+
+    if power_t > 0 and accel_t > 0:
+        if power_t >= 3 and accel_t < 3:
+            paras.append(Paragraph(
+                "<b>Power–Sprint link:</b>  Advanced jump output has not yet transferred to Advanced acceleration — "
+                "force is available but the ability to apply it explosively in the sprint start is the gap. "
+                "Sprint-specific plyometric coupling (e.g. jump → sprint complexes) is the priority.",
+                ps("jump_sprint_link", size=9, color=DGREY),
+            ))
+        elif power_t < 2 and accel_t >= 3:
+            paras.append(Paragraph(
+                "<b>Power–Sprint link:</b>  Acceleration is Advanced despite lower jump scores — "
+                "efficient sprint mechanics are driving output. Raising absolute power will raise the performance ceiling.",
+                ps("jump_sprint_link", size=9, color=DGREY),
+            ))
+        elif power_t >= 2 and accel_t >= 2:
+            paras.append(Paragraph(
+                "<b>Power–Sprint link:</b>  Jump and acceleration tiers are consistent — "
+                "power is translating to the track. Incremental gains in both will compound.",
+                ps("jump_sprint_link", size=9, color=DGREY),
+            ))
+        paras.append(Spacer(1, 3))
+
+    # ── E — Training block ───────────────────────────────────────
+    paras.append(Paragraph("<b>Recommended Training Block:</b>", S_BODY))
+
+    bullets = []
+
+    # CMJ Developing
+    if cmj_cat == "Developing":
+        cmj_v = float(cmj_raw)
+        bullets += [
+            f"CMJ progressions: countermovement to box ({round(cmj_v/2.54,1)} in → target {round(_cmj_comp/2.54,1)} in / {_cmj_comp} cm).",
+            "Eccentric overload: slow-descent squats (3-4s) and trap bar jump squats at 30% 1RM.",
+            "Triple extension drills: power cleans or kettlebell swings 3×5 twice per week.",
+        ]
+    elif cmj_cat == "Competitive":
+        cmj_v = float(cmj_raw)
+        bullets += [
+            f"Depth drop to CMJ: 3×4 reps from 30 cm box — maximise amortisation speed.",
+            f"Loaded jump squats at 20% 1RM: {round(cmj_v/2.54,1)} in → target {round(_cmj_adv/2.54,1)} in ({_cmj_adv} cm) threshold.",
+            "Single-leg step-up jumps to address bilateral force asymmetries.",
+        ]
+    # Broad Jump Developing (if CMJ is already handled above)
+    if bj_cat == "Developing" and cmj_cat != "Developing":
+        bullets += [
+            f"Standing broad jump repeats: 4×3 reps — maximise horizontal intent on every rep.",
+            "Hip hinge strength: Romanian deadlifts and KB swings to build posterior chain drive.",
+            "Resisted broad jumps (light band or sled) to overload horizontal force application.",
+        ]
+    elif bj_cat == "Competitive" and cmj_cat in ("Advanced", "Competitive"):
+        bullets += [
+            f"Broad jump to sprint: 2 broad jumps → immediate 20m sprint — couple horizontal and linear power.",
+            "Bounding circuits: alternating-leg bounds for 4×30m with 3 min recovery.",
+        ]
+    # Both Advanced → maintenance
+    if cmj_cat == "Advanced" and bj_cat == "Advanced":
+        bullets = [
+            "Maintain output: weekly jump testing benchmark — flag any drop > 5% as a recovery flag.",
+            "Plyometric complexes: depth jump → sprint / broad jump → cut — reactive transfer focus.",
+            "Eccentric loading block (3–4 weeks) each macro-cycle to preserve tendon stiffness.",
+        ]
+
+    for b in bullets:
+        paras.append(Paragraph(f"• {b}", ps("jump_bullet", size=9, color=DGREY, sb=1, sa=2)))
+
+    return paras
+
+
 # ── RSI insight builder ───────────────────────────────────────
 
 def _rsi_insight_text(row: pd.Series) -> list:
@@ -1106,21 +1319,14 @@ def _build_pdf_elements(row: pd.Series, logo=None) -> tuple:
     power_rows.append(["CMJ",        cmj_display])
     power_rows.append(["Broad Jump", f"{broad_val} cm" if broad_val != "N/A" else "N/A — not collected"])
 
+    jump_insight_els = _jump_insight_paragraphs(row)
     el.append(KeepTogether([
         section_bar("POWER PROFILE"),
         Spacer(1, 3),
         data_table(power_rows),
-        Spacer(1, 3),
-        Paragraph(
-            f"<b>Lower body explosive power:</b>  "
-            f"{blk['power_level'] if blk['power_level'] != 'N/A' else 'N/A — jump data not collected'}",
-            S_BODY
-        ),
-        Paragraph(
-            "<b>Speed transfer:</b>  Force production relative to sprint performance.",
-            S_BODY
-        ),
         Spacer(1, 5),
+        *jump_insight_els,
+        Spacer(1, 4),
     ]))
 
     # ── Section 3: Reactive Strength Profile ─────────────────
