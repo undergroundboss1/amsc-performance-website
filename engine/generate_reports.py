@@ -18,39 +18,17 @@ from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer,
     Table, TableStyle, KeepTogether, Image,
 )
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-
 from engine.settings import PATHS, BRAND
 
 import os
 ENGINE_MODE = os.getenv("AMSC_ENGINE_MODE", "local")
 
-# ── AMSC Font Registration ────────────────────────────────────
-_FONTS_DIR = Path(__file__).resolve().parent / "assets" / "fonts"
-
-def _reg(name: str, filename: str):
-    """Register a TTFont, silently skip if the file is missing."""
-    path = _FONTS_DIR / filename
-    if path.exists():
-        pdfmetrics.registerFont(TTFont(name, str(path)))
-        return True
-    return False
-
-_fonts_ok = all([
-    _reg("Oswald-Bold",      "Oswald-Bold.ttf"),
-    _reg("Antonio-Bold",     "Antonio-Bold.ttf"),
-    _reg("Antonio-Regular",  "Antonio-Regular.ttf"),
-    _reg("Barlow-Medium",    "Barlow-Medium.ttf"),
-    _reg("Barlow-Bold",      "Barlow-Bold.ttf"),
-])
-
-# Font name aliases used throughout the file
-_F_HEADLINE = "Oswald-Bold"      if _fonts_ok else "Helvetica-Bold"
-_F_METRIC   = "Antonio-Bold"     if _fonts_ok else "Helvetica-Bold"
-_F_METRIC_R = "Antonio-Regular"  if _fonts_ok else "Helvetica"
-_F_BODY     = "Barlow-Medium"    if _fonts_ok else "Helvetica"
-_F_BOLD     = "Barlow-Bold"      if _fonts_ok else "Helvetica-Bold"
+# Font aliases
+_F_HEADLINE = "Helvetica-Bold"
+_F_METRIC   = "Helvetica-Bold"
+_F_METRIC_R = "Helvetica"
+_F_BODY     = "Helvetica"
+_F_BOLD     = "Helvetica-Bold"
 
 OUTPUT_DIR  = PATHS["reports_dir"]
 MASTER_XLSX = PATHS["output_xlsx"]
@@ -197,7 +175,7 @@ def ps(name, size=9, bold=False, color=BLACK, leading=None, sb=0, sa=3, align=0,
        font=None):
     """
     font override: pass a font alias like _F_HEADLINE, _F_METRIC, etc.
-    Defaults to Barlow-Medium (body) or Barlow-Bold (bold).
+    Defaults to Helvetica (body) or Helvetica-Bold (bold).
     """
     chosen = font or (_F_BOLD if bold else _F_BODY)
     return ParagraphStyle(
