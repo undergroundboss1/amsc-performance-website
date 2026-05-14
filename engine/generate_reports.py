@@ -49,14 +49,16 @@ WHITE  = colors.white
 AMBER  = colors.HexColor("#F57F17")
 
 TIER_BG = {
-    "Advanced":    colors.HexColor("#E8F5E9"),
-    "Competitive": colors.HexColor("#FFF8E1"),
-    "Developing":  colors.HexColor("#FFEBEE"),
+    "Advanced":     colors.HexColor("#E8F5E9"),   # soft green
+    "Competitive":  colors.HexColor("#E3F2FD"),   # soft blue
+    "Developing":   colors.HexColor("#FFF8E1"),   # soft amber
+    "Sub-Standard": colors.HexColor("#FFEBEE"),   # soft red
 }
 TIER_CLR = {
-    "Advanced":    colors.HexColor("#1A4D1A"),
-    "Competitive": colors.HexColor("#7A5200"),
-    "Developing":  colors.HexColor("#8B0000"),
+    "Advanced":     colors.HexColor("#1B5E20"),   # deep green
+    "Competitive":  colors.HexColor("#0D47A1"),   # deep blue
+    "Developing":   colors.HexColor("#E65100"),   # deep orange
+    "Sub-Standard": colors.HexColor("#B71C1C"),   # deep red
 }
 
 CHART_GREEN  = "#2E7D32"
@@ -100,13 +102,13 @@ def _is_missing(val) -> bool:
 def _tier_numeric(cat: Optional[str]) -> int:
     if cat is None:
         return 0
-    return {"Advanced": 3, "Competitive": 2}.get(cat, 1)
+    return {"Advanced": 4, "Competitive": 3, "Developing": 2, "Sub-Standard": 1}.get(cat, 0)
 
 
 def _tier_score(cat: Optional[str]) -> int:
     if cat is None:
         return 0
-    return {"Advanced": 100, "Competitive": 75}.get(cat, 50)
+    return {"Advanced": 100, "Competitive": 75, "Developing": 50, "Sub-Standard": 25}.get(cat, 0)
 
 
 def compute_amsc_score(
@@ -269,19 +271,21 @@ def build_sprint_chart(row: pd.Series, width_mm: float, height_mm: float) -> Ima
     return img
 
 
-# Radar continuous scoring — mirrors settings.py thresholds
+# Radar continuous scoring — mirrors settings.py thresholds (updated for 4-tier system)
+# 0–9 scale: Sub-Standard 0–2.25, Developing 2.25–4.5, Competitive 4.5–6.75, Advanced 6.75–9
+# floor = Sub-Standard outer boundary; comp = Competitive lower boundary; adv = Advanced lower boundary
 _RADAR_THRESHOLDS = {
-    "accel": {  # 0-20m split — lower is better
-        "male":   {"comp": 3.00, "adv": 3.00, "elite": 2.60, "floor": 4.50},
-        "female": {"comp": 3.40, "adv": 3.40, "elite": 3.00, "floor": 5.00},
+    "accel": {  # 0-20m — lower is better
+        "male":   {"comp": 3.50, "adv": 3.00, "elite": 2.60, "floor": 4.00},
+        "female": {"comp": 3.90, "adv": 3.40, "elite": 3.00, "floor": 4.50},
     },
     "maxv": {   # fly10 — lower is better
-        "male":   {"comp": 0.95, "adv": 0.95, "elite": 0.80, "floor": 1.40},
-        "female": {"comp": 1.05, "adv": 1.05, "elite": 0.90, "floor": 1.60},
+        "male":   {"comp": 1.10, "adv": 0.95, "elite": 0.80, "floor": 1.40},
+        "female": {"comp": 1.22, "adv": 1.05, "elite": 0.90, "floor": 1.60},
     },
     "power": {  # cmj_cm — higher is better
-        "male":   {"comp": 40,  "adv": 50,  "elite": 70,  "floor": 10},
-        "female": {"comp": 32,  "adv": 40,  "elite": 55,  "floor": 10},
+        "male":   {"comp": 58,  "adv": 66,  "elite": 85,  "floor": 51},
+        "female": {"comp": 48,  "adv": 56,  "elite": 70,  "floor": 41},
     },
 }
 
@@ -289,10 +293,10 @@ _RADAR_THRESHOLDS = {
 def _radar_score(category: Optional[str], value, gender: str, metric: str) -> float:
     """
     Compute a continuous 0–9 radar score from a raw metric value.
-    Bands: Developing 0–3, Competitive 3–6, Advanced 6–9.
+    4-tier bands: Sub-Standard 0–2.25, Developing 2.25–4.5, Competitive 4.5–6.75, Advanced 6.75–9.
     Falls back to band midpoint when value is missing.
     """
-    fallback = {"Advanced": 7.5, "Competitive": 4.5, "Developing": 1.5}
+    fallback = {"Advanced": 7.875, "Competitive": 5.625, "Developing": 3.375, "Sub-Standard": 1.125}
     if value is None or category is None:
         return fallback.get(category, 0.0) if category else 0.0
 
@@ -301,31 +305,37 @@ def _radar_score(category: Optional[str], value, gender: str, metric: str) -> fl
     except (TypeError, ValueError):
         return fallback.get(category, 0.0)
 
-    g   = gender if gender in ("male", "female") else "male"
-    t   = _RADAR_THRESHOLDS.get(metric, {}).get(g)
+    g = gender if gender in ("male", "female") else "male"
+    t = _RADAR_THRESHOLDS.get(metric, {}).get(g)
     if t is None:
         return fallback.get(category, 0.0)
 
     if metric in ("accel", "maxv"):  # lower = better
         if category == "Advanced":
-            pos = (t["comp"] - v) / max(t["comp"] - t["elite"], 0.001)
-            return 6.0 + min(3.0, max(0.0, pos * 3.0))
+            pos = (t["adv"] - v) / max(t["adv"] - t["elite"], 0.001)
+            return 6.75 + min(2.25, max(0.0, pos * 2.25))
         elif category == "Competitive":
+            pos = (t["comp"] - v) / max(t["comp"] - t["adv"], 0.001)
+            return 4.5 + min(2.25, max(0.0, pos * 2.25))
+        elif category == "Developing":
             pos = (t["floor"] - v) / max(t["floor"] - t["comp"], 0.001)
-            return 3.0 + min(3.0, max(0.0, pos * 3.0))
-        else:
-            pos = max(0.0, (t["floor"] - v) / max(t["floor"] - t["comp"], 0.001))
-            return max(0.0, min(3.0, pos * 3.0))
+            return 2.25 + min(2.25, max(0.0, pos * 2.25))
+        else:  # Sub-Standard
+            pos = max(0.0, (t["floor"] - v) / max(t["floor"] * 0.5, 0.001))
+            return max(0.0, min(2.25, pos * 2.25))
     else:  # higher = better (power)
         if category == "Advanced":
             pos = (v - t["adv"]) / max(t["elite"] - t["adv"], 1)
-            return 6.0 + min(3.0, max(0.0, pos * 3.0))
+            return 6.75 + min(2.25, max(0.0, pos * 2.25))
         elif category == "Competitive":
             pos = (v - t["comp"]) / max(t["adv"] - t["comp"], 1)
-            return 3.0 + min(3.0, max(0.0, pos * 3.0))
-        else:
-            pos = max(0.0, v / max(t["comp"], 1))
-            return max(0.0, min(3.0, pos * 3.0))
+            return 4.5 + min(2.25, max(0.0, pos * 2.25))
+        elif category == "Developing":
+            pos = (v - t["floor"]) / max(t["comp"] - t["floor"], 1)
+            return 2.25 + min(2.25, max(0.0, pos * 2.25))
+        else:  # Sub-Standard
+            pos = max(0.0, v / max(t["floor"], 1))
+            return max(0.0, min(2.25, pos * 2.25))
 
 
 def build_radar_chart(
@@ -348,7 +358,7 @@ def build_radar_chart(
         _radar_score(accel, accel_val, g, "accel"),
         _radar_score(maxv,  maxv_val,  g, "maxv"),
         _radar_score(power, power_val, g, "power") if power else 0.0,
-        {"Efficient": 8.0, "Moderate Drop-Off": 4.5}.get(maint, 1.5) if maint else 0.0,
+        {"Efficient": 8.5, "Moderate Drop-Off": 5.0, "Significant Drop-Off": 2.5}.get(maint, 1.0) if maint else 0.0,
     ]
 
     N = len(labels)
@@ -360,16 +370,16 @@ def build_radar_chart(
                            subplot_kw=dict(polar=True))
     fig.patch.set_facecolor("white")
 
-    # 0–9 scale; main rings at 3, 6, 9 = category boundaries
+    # 0–9 scale; main rings at 2.25, 4.5, 6.75, 9 = 4-tier boundaries
     ax.set_ylim(0, 9)
-    ax.set_yticks([3, 6, 9])
-    ax.set_yticklabels(["Developing", "Competitive", "Advanced"],
-                       fontsize=6, color="#888888")
+    ax.set_yticks([2.25, 4.5, 6.75, 9])
+    ax.set_yticklabels(["Sub-Std", "Developing", "Competitive", "Advanced"],
+                       fontsize=5.5, color="#888888")
     ax.set_xticks(angles)
     ax.set_xticklabels(labels, fontsize=7.5, color="#333333")
 
     # Sub-rings at band midpoints (very faint dotted)
-    for sub in [1.5, 4.5, 7.5]:
+    for sub in [1.125, 3.375, 5.625, 7.875]:
         sub_vals = [sub] * (N + 1)
         ax.plot(angles_plot, sub_vals, color="#EEEEEE", linewidth=0.5,
                 linestyle=":", zorder=1)
@@ -382,7 +392,7 @@ def build_radar_chart(
             ax.scatter(ang, 0.2, color="#CCCCCC", s=30, zorder=4,
                        edgecolors="white", linewidth=0.8)
         else:
-            c = CHART_GREEN if val >= 6 else CHART_YELLOW if val >= 3 else CHART_RED
+            c = CHART_GREEN if val >= 6.75 else CHART_YELLOW if val >= 4.5 else CHART_RED
             ax.scatter(ang, val, color=c, s=55, zorder=4,
                        edgecolors="white", linewidth=0.8)
 
@@ -694,7 +704,7 @@ def _sprint_insight_paragraphs(row: pd.Series) -> list:
     _maxv_comp  = {"male": 1.10, "female": 1.22}.get(gender, 1.10)
 
     # ── Sprint Profile Type ───────────────────────────────────
-    tier = {"Advanced": 3, "Competitive": 2, "Developing": 1}
+    tier = {"Advanced": 4, "Competitive": 3, "Developing": 2, "Sub-Standard": 1}
     accel_t = tier.get(accel, 0)
     maxv_t  = tier.get(maxv, 0)
 
@@ -709,20 +719,25 @@ def _sprint_insight_paragraphs(row: pd.Series) -> list:
                 "Velocity-dominant sprint profile — high terminal speed, "
                 "but the early-phase drive is still developing."
             )
-        elif accel_t >= 3:
+        elif accel_t >= 4:
             profile = (
                 "Complete sprint profile — both acceleration and max velocity phases "
                 "are operating at an Advanced level."
             )
-        elif accel_t >= 2:
+        elif accel_t >= 3:
             profile = (
                 "Balanced sprint profile at Competitive level — both phases are tracking "
                 "toward the Advanced benchmark."
             )
+        elif accel_t >= 2:
+            profile = (
+                "Developing sprint profile — both phases are below Competitive. "
+                "Systematic work across acceleration and max velocity mechanics is the priority."
+            )
         else:
             profile = (
-                "Early-stage sprint development — both acceleration and max velocity "
-                "require systematic work across all phases."
+                "Sub-Standard sprint profile — both phases require immediate foundational work. "
+                "Sprint mechanics, posture, and basic acceleration patterns must be established first."
             )
         paras.append(Paragraph(
             f"<b>Sprint Profile:</b>  {profile}", S_BODY
@@ -762,9 +777,22 @@ def _sprint_insight_paragraphs(row: pd.Series) -> list:
     paras.append(Spacer(1, 3))
 
     # ── Development Focus (with gap to next tier) ─────────────
-    if maxv in ("Developing", "Competitive") and fly10 is not None:
+    _maxv_dev  = {"male": 1.40, "female": 1.60}.get(gender, 1.40)
+    _accel_dev = {"male": 4.00, "female": 4.50}.get(gender, 4.00)
+
+    if maxv in ("Sub-Standard", "Developing", "Competitive") and fly10 is not None:
         fly_v = float(fly10)
-        if maxv == "Developing":
+        if maxv == "Sub-Standard":
+            gap_dev  = round(fly_v - _maxv_dev,  2)
+            gap_comp = round(fly_v - _maxv_comp, 2)
+            paras.append(Paragraph(
+                f"<b>Immediate Priority:</b>  Fly 10m of {sf(fly10, '.2f')}s is Sub-Standard. "
+                f"Gap to Developing: {gap_dev}s  |  Gap to Competitive: {gap_comp}s. "
+                f"Fundamental sprint mechanics and max velocity exposure are the first order of work — "
+                f"volume at submaximal speeds before any high-intensity sprint prescription.",
+                S_BODY,
+            ))
+        elif maxv == "Developing":
             gap_comp = round(fly_v - _maxv_comp, 2)
             gap_adv  = round(fly_v - _maxv_adv,  2)
             paras.append(Paragraph(
@@ -781,10 +809,19 @@ def _sprint_insight_paragraphs(row: pd.Series) -> list:
                 f"Increasing terminal velocity and sustaining it for longer are the next steps.",
                 S_BODY,
             ))
-    elif accel in ("Developing", "Competitive") and t20 is not None:
+    elif accel in ("Sub-Standard", "Developing", "Competitive") and t20 is not None:
         t20_v = float(t20)
-        if accel == "Developing":
-            gap_comp = round(t20_v - _accel_adv, 2)
+        if accel == "Sub-Standard":
+            gap_dev  = round(t20_v - _accel_dev,  2)
+            gap_comp = round(t20_v - _accel_comp, 2)
+            paras.append(Paragraph(
+                f"<b>Immediate Priority:</b>  0-20m of {sf(t20, '.2f')}s is Sub-Standard. "
+                f"Gap to Developing: {gap_dev}s  |  Gap to Competitive: {gap_comp}s. "
+                f"Foundational acceleration mechanics must be established before sprint-specific loading.",
+                S_BODY,
+            ))
+        elif accel == "Developing":
+            gap_comp = round(t20_v - _accel_comp, 2)
             paras.append(Paragraph(
                 f"<b>Development Focus:</b>  0-20m of {sf(t20, '.2f')}s is Developing "
                 f"({gap_comp}s from Competitive). "
@@ -824,7 +861,7 @@ def _sprint_insight_paragraphs(row: pd.Series) -> list:
     # ── Power–Sprint cross-reference ─────────────────────────
     if power_cat and accel_t > 0 and maxv_t > 0:
         power_t = tier.get(power_cat, 0)
-        if power_t >= 3 and accel_t < 3:
+        if power_t >= 4 and accel_t < 4:
             paras.append(Paragraph(
                 "<b>Power–Sprint Note:</b>  Lower body power is Advanced but acceleration "
                 "has not yet reached that tier — force is available but sprint-specific "
@@ -833,7 +870,7 @@ def _sprint_insight_paragraphs(row: pd.Series) -> list:
                 S_BODY,
             ))
             paras.append(Spacer(1, 3))
-        elif power_t < 2 and accel_t >= 3:
+        elif power_t <= 1 and accel_t >= 4:
             paras.append(Paragraph(
                 "<b>Power–Sprint Note:</b>  Sprint acceleration is Advanced despite lower "
                 "power scores — efficient mechanics are driving sprint output. "
@@ -846,9 +883,15 @@ def _sprint_insight_paragraphs(row: pd.Series) -> list:
     paras.append(Paragraph("<b>Recommended Training Block:</b>", S_BODY))
 
     bullets = []
-    # Max velocity is the primary gap
-    if maxv == "Developing" and fly10 is not None:
-        target = round(float(fly10) * 0.95, 2)  # 5% improvement target
+    # Sub-Standard max velocity → foundational work first
+    if maxv == "Sub-Standard" and fly10 is not None:
+        bullets += [
+            f"Sprint mechanics: A-march, A-skip, and wall drills — establish posture and hip drive before speed work.",
+            f"Submaximal flying sprints (70–80% effort): 4×20m — build neuromuscular pattern at manageable intensity.",
+            f"Target: reduce fly 10m from {sf(fly10, '.2f')}s toward {_maxv_dev}s (Developing threshold) over 8–12 weeks.",
+        ]
+    # Developing max velocity
+    elif maxv == "Developing" and fly10 is not None:
         bullets += [
             f"Flying sprints: 3×(2×20m) at ≥95% effort — extend exposure to terminal velocity.",
             f"Upright mechanics: A-series progressions, high-knee drives, and wicket runs at technical speed.",
@@ -860,7 +903,14 @@ def _sprint_insight_paragraphs(row: pd.Series) -> list:
             f"Sprint float sets: 10m max drive → 20m float at 95% → 10m re-acceleration.",
             f"Target: reduce fly 10m from {sf(fly10, '.2f')}s toward {_maxv_adv}s (Advanced threshold).",
         ]
-    # Acceleration is the primary gap
+    # Sub-Standard acceleration → foundations
+    elif accel == "Sub-Standard" and t20 is not None:
+        bullets += [
+            f"Acceleration mechanics: wall drills, standing starts, and falling starts — establish drive phase posture.",
+            f"Short acceleration repeats: 6×10m from standing, full recovery — quality over quantity.",
+            f"Target: reduce 0-20m from {sf(t20, '.2f')}s toward {_accel_dev}s (Developing threshold).",
+        ]
+    # Developing acceleration
     elif accel == "Developing" and t20 is not None:
         bullets += [
             f"Resisted sprint work: sled pulls at 10–15% bodyweight over 15–20m.",
@@ -911,31 +961,38 @@ def _jump_insight_paragraphs(row: pd.Series) -> list:
         ))
         return paras
 
-    # Thresholds
-    _cmj_adv  = {"male": 50, "female": 40}.get(gender, 50)
-    _cmj_comp = {"male": 40, "female": 32}.get(gender, 40)
+    # Thresholds — aligned with settings.py 4-tier values
+    _cmj_adv  = {"male": 66, "female": 56}.get(gender, 66)   # 26in / 22in
+    _cmj_comp = {"male": 58, "female": 48}.get(gender, 58)   # 23in / 19in
+    _cmj_dev  = {"male": 51, "female": 41}.get(gender, 51)   # 20in / 16in
     _bj_adv   = {"male": 250, "female": 200}.get(gender, 250)
     _bj_comp  = {"male": 220, "female": 175}.get(gender, 220)
+    _bj_dev   = {"male": 195, "female": 155}.get(gender, 195)
 
-    tier = {"Advanced": 3, "Competitive": 2, "Developing": 1}
+    tier = {"Advanced": 4, "Competitive": 3, "Developing": 2, "Sub-Standard": 1}
     cmj_cat = None
     bj_cat  = None
 
     # ── A — CMJ insight ─────────────────────────────────────────
     if cmj_raw is not None:
-        cmj_v   = float(cmj_raw)
-        cmj_in  = round(cmj_v / 2.54, 1)
+        cmj_v  = float(cmj_raw)
+        cmj_in = round(cmj_v / 2.54, 1)
         if cmj_v >= _cmj_adv:
             cmj_cat = "Advanced"
-            benchmark = f"above the Advanced threshold ({_cmj_adv} cm / {round(_cmj_adv/2.54,1)} in)"
+            benchmark = f"above the Advanced threshold ({round(_cmj_adv/2.54,0):.0f} in)"
         elif cmj_v >= _cmj_comp:
             cmj_cat = "Competitive"
-            gap_adv = round(_cmj_adv - cmj_v, 1)
-            benchmark = f"within the Competitive range — {gap_adv} cm from Advanced"
-        else:
+            gap_adv = round((_cmj_adv - cmj_v) / 2.54, 1)
+            benchmark = f"within the Competitive range — {gap_adv} in from Advanced"
+        elif cmj_v >= _cmj_dev:
             cmj_cat = "Developing"
-            gap_comp = round(_cmj_comp - cmj_v, 1)
-            benchmark = f"below Competitive threshold — {gap_comp} cm from Competitive, {round(_cmj_adv - cmj_v, 1)} cm from Advanced"
+            gap_comp = round((_cmj_comp - cmj_v) / 2.54, 1)
+            benchmark = f"Developing — {gap_comp} in from Competitive"
+        else:
+            cmj_cat = "Sub-Standard"
+            gap_dev  = round((_cmj_dev  - cmj_v) / 2.54, 1)
+            gap_comp = round((_cmj_comp - cmj_v) / 2.54, 1)
+            benchmark = f"Sub-Standard — {gap_dev} in from Developing, {gap_comp} in from Competitive"
 
         paras.append(Paragraph(
             f"<b>CMJ — {cmj_cat}:</b>  {cmj_in} in ({cmj_v:.0f} cm), {benchmark}. "
@@ -954,10 +1011,15 @@ def _jump_insight_paragraphs(row: pd.Series) -> list:
             bj_cat = "Competitive"
             gap_adv = round(_bj_adv - bj_v, 0)
             benchmark = f"within the Competitive range — {gap_adv:.0f} cm from Advanced"
-        else:
+        elif bj_v >= _bj_dev:
             bj_cat = "Developing"
             gap_comp = round(_bj_comp - bj_v, 0)
-            benchmark = f"below Competitive — {gap_comp:.0f} cm from Competitive"
+            benchmark = f"Developing — {gap_comp:.0f} cm from Competitive"
+        else:
+            bj_cat = "Sub-Standard"
+            gap_dev  = round(_bj_dev  - bj_v, 0)
+            gap_comp = round(_bj_comp - bj_v, 0)
+            benchmark = f"Sub-Standard — {gap_dev:.0f} cm from Developing, {gap_comp:.0f} cm from Competitive"
 
         paras.append(Paragraph(
             f"<b>Broad Jump — {bj_cat}:</b>  {bj_v:.0f} cm, {benchmark}. "
@@ -999,14 +1061,14 @@ def _jump_insight_paragraphs(row: pd.Series) -> list:
     power_t = tier.get(power_cat, 0) if power_cat else 0
 
     if power_t > 0 and accel_t > 0:
-        if power_t >= 3 and accel_t < 3:
+        if power_t >= 4 and accel_t < 4:
             paras.append(Paragraph(
                 "<b>Power–Sprint link:</b>  Advanced jump output has not yet transferred to Advanced acceleration — "
                 "force is available but the ability to apply it explosively in the sprint start is the gap. "
                 "Sprint-specific plyometric coupling (e.g. jump → sprint complexes) is the priority.",
                 ps("jump_sprint_link", size=9, color=DGREY),
             ))
-        elif power_t < 2 and accel_t >= 3:
+        elif power_t <= 1 and accel_t >= 4:
             paras.append(Paragraph(
                 "<b>Power–Sprint link:</b>  Acceleration is Advanced despite lower jump scores — "
                 "efficient sprint mechanics are driving output. Raising absolute power will raise the performance ceiling.",
@@ -1025,11 +1087,18 @@ def _jump_insight_paragraphs(row: pd.Series) -> list:
 
     bullets = []
 
-    # CMJ Developing
-    if cmj_cat == "Developing":
+    # CMJ Sub-Standard → foundational strength first
+    if cmj_cat == "Sub-Standard":
         cmj_v = float(cmj_raw)
         bullets += [
-            f"CMJ progressions: countermovement to box ({round(cmj_v/2.54,1)} in → target {round(_cmj_comp/2.54,1)} in / {_cmj_comp} cm).",
+            f"Foundational strength: goblet squats, Romanian deadlifts, and glute bridges — build force before plyometric loading.",
+            f"Introductory jumps: box squats to stand and low-amplitude squat jumps — establish triple extension pattern.",
+            f"Immediate target: reach {round(_cmj_dev/2.54,0):.0f} in ({_cmj_dev} cm) threshold (currently {round(cmj_v/2.54,1)} in).",
+        ]
+    elif cmj_cat == "Developing":
+        cmj_v = float(cmj_raw)
+        bullets += [
+            f"CMJ progressions: countermovement to box ({round(cmj_v/2.54,1)} in → target {round(_cmj_comp/2.54,1)} in).",
             "Eccentric overload: slow-descent squats (3-4s) and trap bar jump squats at 30% 1RM.",
             "Triple extension drills: power cleans or kettlebell swings 3×5 twice per week.",
         ]
@@ -1040,16 +1109,21 @@ def _jump_insight_paragraphs(row: pd.Series) -> list:
             f"Loaded jump squats at 20% 1RM: {round(cmj_v/2.54,1)} in → target {round(_cmj_adv/2.54,1)} in ({_cmj_adv} cm) threshold.",
             "Single-leg step-up jumps to address bilateral force asymmetries.",
         ]
-    # Broad Jump Developing (if CMJ is already handled above)
-    if bj_cat == "Developing" and cmj_cat != "Developing":
+    # Broad Jump (only if CMJ training block hasn't already addressed low power)
+    if bj_cat == "Sub-Standard" and cmj_cat not in ("Sub-Standard",):
         bullets += [
-            f"Standing broad jump repeats: 4×3 reps — maximise horizontal intent on every rep.",
+            "Horizontal force primer: hip hinge and glute bridge progressions before loaded broad jumps.",
+            f"Standing broad jump repeats: 4×3 reps — focus on horizontal intent and hip extension.",
+        ]
+    elif bj_cat == "Developing" and cmj_cat not in ("Sub-Standard", "Developing"):
+        bullets += [
+            "Standing broad jump repeats: 4×3 reps — maximise horizontal intent on every rep.",
             "Hip hinge strength: Romanian deadlifts and KB swings to build posterior chain drive.",
             "Resisted broad jumps (light band or sled) to overload horizontal force application.",
         ]
     elif bj_cat == "Competitive" and cmj_cat in ("Advanced", "Competitive"):
         bullets += [
-            f"Broad jump to sprint: 2 broad jumps → immediate 20m sprint — couple horizontal and linear power.",
+            "Broad jump to sprint: 2 broad jumps → immediate 20m sprint — couple horizontal and linear power.",
             "Bounding circuits: alternating-leg bounds for 4×30m with 3 min recovery.",
         ]
     # Both Advanced → maintenance
@@ -1084,20 +1158,21 @@ def _rsi_insight_text(row: pd.Series) -> list:
     sl_l_cat = row.get("rsi_single_left_category")
     sl_r_cat = row.get("rsi_single_right_category")
 
-    # RSI thresholds for context sentences
+    # RSI thresholds for context sentences (aligned with settings.py 4-tier values)
     _adv  = {"male": 2.60, "female": 2.20}.get(gender, 2.60)
     _comp = {"male": 2.00, "female": 1.60}.get(gender, 2.00)
+    _dev  = {"male": 1.50, "female": 1.20}.get(gender, 1.50)
     _sl_adv  = {"male": 2.00, "female": 1.70}.get(gender, 2.00)
     _sl_comp = {"male": 1.50, "female": 1.20}.get(gender, 1.50)
+    _sl_dev  = {"male": 1.00, "female": 0.80}.get(gender, 1.00)
 
     # A — Double-leg RSI context
     if dl_avg is not None and dl_cat:
-        threshold = _adv if dl_cat == "Advanced" else _comp if dl_cat == "Competitive" else _comp
-        direction = "above" if dl_cat in ("Advanced", "Competitive") else "below"
         benchmark = (
             f"above the Advanced threshold ({_adv})" if dl_cat == "Advanced" else
             f"within the Competitive range ({_comp}–{_adv})" if dl_cat == "Competitive" else
-            f"below the Competitive threshold ({_comp})"
+            f"within the Developing range ({_dev}–{_comp})" if dl_cat == "Developing" else
+            f"Sub-Standard — below {_dev} (minimum Developing threshold)"
         )
         paras.append(Paragraph(
             f"<b>Double-leg RSI {sf(dl_avg, '.2f')} — {dl_cat}</b>  ({benchmark}).",

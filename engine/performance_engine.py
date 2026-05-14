@@ -29,9 +29,10 @@ Gender = Literal["male", "female"]
 
 
 class Tier(str, Enum):
-    DEVELOPING  = "Developing"
-    COMPETITIVE = "Competitive"
-    ADVANCED    = "Advanced"
+    SUB_STANDARD = "Sub-Standard"
+    DEVELOPING   = "Developing"
+    COMPETITIVE  = "Competitive"
+    ADVANCED     = "Advanced"
 
 
 class SpeedMaintenance(str, Enum):
@@ -151,27 +152,27 @@ def normalize_gender(value: str) -> Optional[str]:
 # ── Generic classifiers ────────────────────────────────────────
 
 def _classify_time(gender: Gender, time: float, thresholds: dict) -> Tier:
-    """Lower is better (sprint times)."""
-    g    = thresholds[gender]
-    adv  = g["advanced"]
-    comp = g["competitive"]
-    if "max" in adv and time <= adv["max"]:
+    """Lower is better (sprint times). 4-tier: Advanced → Competitive → Developing → Sub-Standard."""
+    g = thresholds[gender]
+    if time <= g["advanced"]["max"]:
         return Tier.ADVANCED
-    if comp.get("min", float("-inf")) <= time <= comp.get("max", float("inf")):
+    if g["competitive"]["min"] <= time <= g["competitive"]["max"]:
         return Tier.COMPETITIVE
-    return Tier.DEVELOPING
+    if "developing" in g and time <= g["developing"]["max"]:
+        return Tier.DEVELOPING
+    return Tier.SUB_STANDARD
 
 
 def _classify_distance(gender: Gender, value: float, thresholds: dict) -> Tier:
-    """Higher is better (jumps)."""
-    g    = thresholds[gender]
-    adv  = g["advanced"]
-    comp = g["competitive"]
-    if "min" in adv and value >= adv["min"]:
+    """Higher is better (jumps, RSI). 4-tier: Advanced → Competitive → Developing → Sub-Standard."""
+    g = thresholds[gender]
+    if value >= g["advanced"]["min"]:
         return Tier.ADVANCED
-    if comp.get("min", float("-inf")) <= value <= comp.get("max", float("inf")):
+    if g["competitive"]["min"] <= value <= g["competitive"]["max"]:
         return Tier.COMPETITIVE
-    return Tier.DEVELOPING
+    if "developing" in g and value >= g["developing"]["min"]:
+        return Tier.DEVELOPING
+    return Tier.SUB_STANDARD
 
 
 # ── Derived segments ───────────────────────────────────────────
@@ -233,7 +234,7 @@ def classify_max_velocity(
     if fly10_tier == segment_tier:
         return fly10_tier
 
-    tier_rank = {Tier.DEVELOPING: 1, Tier.COMPETITIVE: 2, Tier.ADVANCED: 3}
+    tier_rank = {Tier.SUB_STANDARD: 0, Tier.DEVELOPING: 1, Tier.COMPETITIVE: 2, Tier.ADVANCED: 3}
     if tier_rank[fly10_tier] >= tier_rank[segment_tier]:
         return fly10_tier
 
@@ -328,7 +329,7 @@ def detect_power_profile_type(
     """
     if cmj_cat is None or rsi_double_cat is None:
         return None
-    tier_rank = {Tier.DEVELOPING: 1, Tier.COMPETITIVE: 2, Tier.ADVANCED: 3}
+    tier_rank = {Tier.SUB_STANDARD: 0, Tier.DEVELOPING: 1, Tier.COMPETITIVE: 2, Tier.ADVANCED: 3}
     cmj_rank = tier_rank[cmj_cat]
     rsi_rank = tier_rank[rsi_double_cat]
     if rsi_rank > cmj_rank:
@@ -349,11 +350,10 @@ def classify_power(
         return {"power_category": None, "power_level": None}
 
     cats = [c.value for c in [cmj_cat, broad_cat, rsi_double_cat] if c is not None]
-    if "Advanced" in cats:
-        return {"power_category": "Advanced", "power_level": "Strong"}
-    elif "Competitive" in cats:
-        return {"power_category": "Competitive", "power_level": "Moderate"}
-    return {"power_category": "Developing", "power_level": "Needs Development"}
+    if "Advanced"     in cats: return {"power_category": "Advanced",     "power_level": "Strong"}
+    if "Competitive"  in cats: return {"power_category": "Competitive",  "power_level": "Moderate"}
+    if "Developing"   in cats: return {"power_category": "Developing",   "power_level": "Needs Development"}
+    return                            {"power_category": "Sub-Standard", "power_level": "Significant Deficit"}
 
 
 # ── Imbalance detection ────────────────────────────────────────
@@ -367,13 +367,14 @@ def detect_primary_imbalance(
     rsi_asymmetry:      Optional[dict] = None,
     power_profile_type: Optional[str]  = None,
 ) -> str:
+    _weak = (Tier.DEVELOPING, Tier.SUB_STANDARD)
     strong_accel = accel_cat   == Tier.ADVANCED
-    weak_accel   = accel_cat   == Tier.DEVELOPING
+    weak_accel   = accel_cat   in _weak
     strong_maxv  = max_vel_cat == Tier.ADVANCED
-    weak_maxv    = max_vel_cat == Tier.DEVELOPING
+    weak_maxv    = max_vel_cat in _weak
     strong_power = ((cmj_cat   == Tier.ADVANCED) or (broad_cat == Tier.ADVANCED))
-    weak_power   = ((cmj_cat   == Tier.DEVELOPING or cmj_cat is None) and
-                    (broad_cat == Tier.DEVELOPING or broad_cat is None))
+    weak_power   = ((cmj_cat   in _weak or cmj_cat is None) and
+                    (broad_cat in _weak or broad_cat is None))
     poor_maint   = speed_maint_cat == SpeedMaintenance.SIGNIFICANT
 
     if strong_accel and weak_maxv:
