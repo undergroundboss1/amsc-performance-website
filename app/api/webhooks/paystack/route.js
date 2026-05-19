@@ -56,10 +56,13 @@ export async function POST(request) {
         return NextResponse.json({ message: 'No reference' }, { status: 200 });
       }
 
+      const paidAt = data.paid_at || new Date().toISOString();
+      const amountKes = data.amount / 100;
+
       const updateFields = {
         payment_status: 'paid',
-        last_paid_at: data.paid_at || new Date().toISOString(),
-        notes: `Paystack charge confirmed. Amount: ${data.amount / 100} ${data.currency}. Channel: ${data.channel}. Paid at: ${data.paid_at}`,
+        last_paid_at: paidAt,
+        notes: `Paystack charge confirmed. Amount: ${amountKes} ${data.currency}. Channel: ${data.channel}. Paid at: ${paidAt}`,
       };
 
       // Store subscription code on first charge so we can cancel later
@@ -80,6 +83,47 @@ export async function POST(request) {
 
       if (error) {
         console.error('Paystack webhook: DB update error (charge.success):', error);
+      }
+
+      // ── Insert payment record into payments table ─────────────────────
+      try {
+        // Fetch client to get their ID and plan info
+        const { data: clientForPayment } = await supabase
+          .from('clients')
+          .select('id, selected_plan, plan_price')
+          .eq('payment_reference', reference)
+          .single();
+
+        if (clientForPayment) {
+          // Determine payment method from Paystack channel
+          const paymentMethod =
+            data.channel === 'mobile_money' ? 'paystack_mpesa' : 'paystack_card';
+
+          const { error: paymentInsertError } = await supabase
+            .from('payments')
+            .insert({
+              client_id: clientForPayment.id,
+              amount: amountKes,
+              currency: data.currency || 'KES',
+              payment_date: paidAt,
+              payment_method: paymentMethod,
+              payment_reference: reference,
+              plan_id: clientForPayment.selected_plan || null,
+              plan_price: clientForPayment.plan_price || null,
+              months_covered: 1,
+              notes: `Paystack ${data.channel} — ref: ${reference}`,
+              source: 'webhook',
+            });
+
+          if (paymentInsertError) {
+            // Non-fatal — log but don't break the webhook response
+            console.error('Paystack webhook: payments insert error:', paymentInsertError);
+          } else {
+            console.log(`Payment record inserted: ${amountKes} KES for client ${clientForPayment.id}`);
+          }
+        }
+      } catch (paymentErr) {
+        console.error('Paystack webhook: payments insert error (non-fatal):', paymentErr);
       }
 
       // Send onboarding email on first payment only

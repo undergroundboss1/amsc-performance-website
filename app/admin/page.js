@@ -22,6 +22,21 @@ function formatDate(date) {
   });
 }
 
+function formatKES(amount) {
+  return `KES ${Number(amount).toLocaleString('en-KE')}`;
+}
+
+function paymentMethodLabel(method) {
+  const labels = {
+    paystack_card: 'Card (Paystack)',
+    paystack_mpesa: 'M-Pesa',
+    manual_cash: 'Cash',
+    manual_bank_transfer: 'Bank Transfer',
+    other: 'Other',
+  };
+  return labels[method] || method || '—';
+}
+
 function getPaymentTiming(client) {
   if (!client.last_paid_at && !client.training_start_date) return null;
 
@@ -411,6 +426,20 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
   const [startDateSaving, setStartDateSaving] = useState(false);
   const [startDateResult, setStartDateResult] = useState(null); // { success, message }
 
+  // Payment history state
+  const [payments, setPayments] = useState([]);
+  const [paymentsLoading, setPaymentsLoading] = useState(false);
+  const [showAddPayment, setShowAddPayment] = useState(false);
+  const [addPaymentForm, setAddPaymentForm] = useState({
+    amount: '',
+    paymentDate: new Date().toISOString().split('T')[0],
+    paymentMethod: 'manual_cash',
+    monthsCovered: '1',
+    notes: '',
+  });
+  const [addPaymentLoading, setAddPaymentLoading] = useState(false);
+  const [addPaymentResult, setAddPaymentResult] = useState(null); // { ok: bool, message: string }
+
   const isCardClient = client.payment_provider === 'paystack';
   const planChanged = selectedPlan !== client.selected_plan;
   const selectedPlanObj = trainingPlans.find(p => p.id === selectedPlan);
@@ -502,6 +531,63 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
       setPlanChanging(false);
     }
   }
+
+  async function fetchPayments() {
+    setPaymentsLoading(true);
+    try {
+      const res = await fetch(`/api/admin/payments?clientId=${client.id}`, {
+        headers: { Authorization: `Bearer ${adminKey}` },
+      });
+      const json = await res.json();
+      if (res.ok) setPayments(json.payments || []);
+    } catch (e) {
+      console.error('fetchPayments error', e);
+    } finally {
+      setPaymentsLoading(false);
+    }
+  }
+
+  async function handleAddPayment(e) {
+    e.preventDefault();
+    setAddPaymentLoading(true);
+    setAddPaymentResult(null);
+    try {
+      const res = await fetch('/api/admin/add-payment', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminKey}`,
+        },
+        body: JSON.stringify({
+          clientId: client.id,
+          amount: Number(addPaymentForm.amount),
+          paymentDate: addPaymentForm.paymentDate,
+          paymentMethod: addPaymentForm.paymentMethod,
+          monthsCovered: Number(addPaymentForm.monthsCovered),
+          notes: addPaymentForm.notes || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setAddPaymentResult({ ok: true, message: json.message });
+        setAddPaymentForm({ amount: '', paymentDate: new Date().toISOString().split('T')[0], paymentMethod: 'manual_cash', monthsCovered: '1', notes: '' });
+        setShowAddPayment(false);
+        fetchPayments(); // refresh list
+        // Also refresh the parent client list
+        if (onUpdate) onUpdate();
+      } else {
+        setAddPaymentResult({ ok: false, message: json.error || 'Failed to record payment.' });
+      }
+    } catch (err) {
+      setAddPaymentResult({ ok: false, message: 'Something went wrong.' });
+    } finally {
+      setAddPaymentLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    fetchPayments();
+  }, [client.id]);
 
   const planName = trainingPlans.find(p => p.id === client.selected_plan)?.name || client.selected_plan;
   const timing = getPaymentTiming(client);
@@ -738,7 +824,7 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
       )}
 
       {/* ── ACTIONS ──────────────────────────────────────────── */}
-      <div className="bg-surface border border-white/5 rounded-xl p-6 mb-8">
+      <div className="bg-surface border border-white/5 rounded-xl p-6 mb-4">
         <p className="text-[10px] font-display font-bold tracking-widest uppercase text-accent mb-4">Actions</p>
 
         {/* Payment link from approve action */}
@@ -787,6 +873,275 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
           </p>
         )}
       </div>
+
+      {/* ── PAYMENT HISTORY ──────────────────────────────────── */}
+      <div className="bg-surface border border-white/5 rounded-xl p-6 mb-8">
+        <div style={{ borderTop: '0', paddingTop: '0', marginTop: '0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <p style={{ fontFamily: 'Oswald, sans-serif', fontWeight: 700, fontSize: '13px', letterSpacing: '0.1em', color: '#d3d3d3', textTransform: 'uppercase', margin: 0 }}>
+              Payment History
+            </p>
+            <button
+              onClick={() => setShowAddPayment(v => !v)}
+              style={{ background: '#a60a08', color: '#f5f5f8', border: 'none', borderRadius: '6px', padding: '6px 14px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', letterSpacing: '0.05em' }}
+            >
+              + Add Payment
+            </button>
+          </div>
+
+          {/* Add payment result message */}
+          {addPaymentResult && (
+            <div style={{ padding: '10px 14px', borderRadius: '6px', marginBottom: '12px', background: addPaymentResult.ok ? '#14532d' : '#450a0a', color: addPaymentResult.ok ? '#86efac' : '#fca5a5', fontSize: '13px' }}>
+              {addPaymentResult.message}
+            </div>
+          )}
+
+          {/* Add payment inline form */}
+          {showAddPayment && (
+            <form onSubmit={handleAddPayment} style={{ background: '#111', border: '1px solid #333', borderRadius: '8px', padding: '16px', marginBottom: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <p style={{ fontFamily: 'Oswald, sans-serif', fontWeight: 700, fontSize: '11px', letterSpacing: '0.1em', color: '#555', textTransform: 'uppercase', marginBottom: '12px', margin: '0 0 12px 0' }}>Record Manual Payment</p>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', color: '#555', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Amount (KES) *</label>
+                <input
+                  type="number" required min="1"
+                  value={addPaymentForm.amount}
+                  onChange={e => setAddPaymentForm(f => ({ ...f, amount: e.target.value }))}
+                  placeholder="e.g. 15000"
+                  style={{ width: '100%', background: '#1a1a1a', border: '1px solid #333', borderRadius: '6px', padding: '8px 10px', color: '#f5f5f8', fontSize: '14px', boxSizing: 'border-box' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', color: '#555', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Payment Date *</label>
+                <input
+                  type="date" required
+                  value={addPaymentForm.paymentDate}
+                  onChange={e => setAddPaymentForm(f => ({ ...f, paymentDate: e.target.value }))}
+                  style={{ width: '100%', background: '#1a1a1a', border: '1px solid #333', borderRadius: '6px', padding: '8px 10px', color: '#f5f5f8', fontSize: '14px', boxSizing: 'border-box' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', color: '#555', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Method</label>
+                <select
+                  value={addPaymentForm.paymentMethod}
+                  onChange={e => setAddPaymentForm(f => ({ ...f, paymentMethod: e.target.value }))}
+                  style={{ width: '100%', background: '#1a1a1a', border: '1px solid #333', borderRadius: '6px', padding: '8px 10px', color: '#f5f5f8', fontSize: '14px', boxSizing: 'border-box' }}
+                >
+                  <option value="manual_cash">Cash</option>
+                  <option value="manual_bank_transfer">Bank Transfer</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', color: '#555', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Months Covered</label>
+                <input
+                  type="number" min="1" max="24"
+                  value={addPaymentForm.monthsCovered}
+                  onChange={e => setAddPaymentForm(f => ({ ...f, monthsCovered: e.target.value }))}
+                  style={{ width: '100%', background: '#1a1a1a', border: '1px solid #333', borderRadius: '6px', padding: '8px 10px', color: '#f5f5f8', fontSize: '14px', boxSizing: 'border-box' }}
+                />
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ display: 'block', fontSize: '11px', color: '#555', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Notes</label>
+                <input
+                  type="text"
+                  value={addPaymentForm.notes}
+                  onChange={e => setAddPaymentForm(f => ({ ...f, notes: e.target.value }))}
+                  placeholder="Optional note"
+                  style={{ width: '100%', background: '#1a1a1a', border: '1px solid #333', borderRadius: '6px', padding: '8px 10px', color: '#f5f5f8', fontSize: '14px', boxSizing: 'border-box' }}
+                />
+              </div>
+              <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                <button type="button" onClick={() => setShowAddPayment(false)} style={{ background: 'transparent', border: '1px solid #333', color: '#d3d3d3', borderRadius: '6px', padding: '8px 16px', fontSize: '13px', cursor: 'pointer' }}>
+                  Cancel
+                </button>
+                <button type="submit" disabled={addPaymentLoading} style={{ background: '#a60a08', color: '#f5f5f8', border: 'none', borderRadius: '6px', padding: '8px 20px', fontSize: '13px', fontWeight: 600, cursor: addPaymentLoading ? 'not-allowed' : 'pointer', opacity: addPaymentLoading ? 0.6 : 1 }}>
+                  {addPaymentLoading ? 'Saving…' : 'Save Payment'}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* Payment list */}
+          {paymentsLoading ? (
+            <p style={{ color: '#555', fontSize: '13px' }}>Loading payments…</p>
+          ) : payments.length === 0 ? (
+            <p style={{ color: '#555', fontSize: '13px', fontStyle: 'italic' }}>No payments recorded yet.</p>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #222' }}>
+                    {['Date', 'Amount', 'Method', 'Rent Split', 'Net Revenue', 'Months', 'Notes'].map(h => (
+                      <th key={h} style={{ textAlign: 'left', padding: '6px 10px', color: '#555', fontFamily: 'Oswald, sans-serif', fontWeight: 700, fontSize: '11px', letterSpacing: '0.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {payments.map(p => (
+                    <tr key={p.id} style={{ borderBottom: '1px solid #111' }}>
+                      <td style={{ padding: '8px 10px', color: '#f5f5f8', whiteSpace: 'nowrap' }}>{formatDate(new Date(p.payment_date))}</td>
+                      <td style={{ padding: '8px 10px', color: '#f5f5f8', fontWeight: 600 }}>{formatKES(p.amount)}</td>
+                      <td style={{ padding: '8px 10px', color: '#d3d3d3' }}>{paymentMethodLabel(p.payment_method)}</td>
+                      <td style={{ padding: '8px 10px', color: p.rent_split > 0 ? '#fbbf24' : '#555' }}>{p.rent_split > 0 ? formatKES(p.rent_split) : '—'}</td>
+                      <td style={{ padding: '8px 10px', color: '#22c55e' }}>{formatKES(p.net_revenue)}</td>
+                      <td style={{ padding: '8px 10px', color: '#d3d3d3', textAlign: 'center' }}>{p.months_covered}</td>
+                      <td style={{ padding: '8px 10px', color: '#555', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.notes || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                {/* Totals row */}
+                {payments.length > 1 && (() => {
+                  const totals = payments.reduce((acc, p) => ({
+                    amount: acc.amount + Number(p.amount),
+                    rent: acc.rent + Number(p.rent_split),
+                    net: acc.net + Number(p.net_revenue),
+                  }), { amount: 0, rent: 0, net: 0 });
+                  return (
+                    <tfoot>
+                      <tr style={{ borderTop: '2px solid #333' }}>
+                        <td style={{ padding: '8px 10px', color: '#555', fontFamily: 'Oswald, sans-serif', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Total</td>
+                        <td style={{ padding: '8px 10px', color: '#f5f5f8', fontWeight: 700 }}>{formatKES(totals.amount)}</td>
+                        <td></td>
+                        <td style={{ padding: '8px 10px', color: '#fbbf24', fontWeight: 600 }}>{totals.rent > 0 ? formatKES(totals.rent) : '—'}</td>
+                        <td style={{ padding: '8px 10px', color: '#22c55e', fontWeight: 600 }}>{formatKES(totals.net)}</td>
+                        <td></td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  );
+                })()}
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// RevenueView — all-payments ledger with KPI summary
+// ─────────────────────────────────────────────────────────────
+
+function RevenueView({ adminKey }) {
+  const [payments, setPayments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('');
+
+  useEffect(() => {
+    async function fetchAll() {
+      setLoading(true);
+      try {
+        const res = await fetch('/api/admin/payments', {
+          headers: { Authorization: `Bearer ${adminKey}` },
+        });
+        const json = await res.json();
+        if (res.ok) setPayments(json.payments || []);
+      } catch (e) {
+        console.error('RevenueView fetch error', e);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchAll();
+  }, [adminKey]);
+
+  const filtered = filter
+    ? payments.filter(p =>
+        (p.clients?.full_name || '').toLowerCase().includes(filter.toLowerCase()) ||
+        (p.payment_method || '').toLowerCase().includes(filter.toLowerCase())
+      )
+    : payments;
+
+  // Summary KPIs
+  const now = new Date();
+  const thisMonthPayments = payments.filter(p => {
+    const d = new Date(p.payment_date);
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  });
+
+  const totalsAll = payments.reduce((a, p) => ({ revenue: a.revenue + +p.amount, rent: a.rent + +p.rent_split, net: a.net + +p.net_revenue }), { revenue: 0, rent: 0, net: 0 });
+  const totalsMonth = thisMonthPayments.reduce((a, p) => ({ revenue: a.revenue + +p.amount, rent: a.rent + +p.rent_split, net: a.net + +p.net_revenue }), { revenue: 0, rent: 0, net: 0 });
+
+  return (
+    <div>
+      {/* KPI strip */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '24px' }}>
+        {[
+          { label: 'This Month — Revenue', value: formatKES(totalsMonth.revenue), sub: `${thisMonthPayments.length} payment${thisMonthPayments.length !== 1 ? 's' : ''}` },
+          { label: 'This Month — Rent', value: formatKES(totalsMonth.rent), sub: 'Facility split (40%)' },
+          { label: 'This Month — Net', value: formatKES(totalsMonth.net), sub: 'After rent split', green: true },
+        ].map(k => (
+          <div key={k.label} style={{ background: '#1a1a1a', border: '1px solid #222', borderRadius: '8px', padding: '16px' }}>
+            <p style={{ fontFamily: 'Oswald, sans-serif', fontWeight: 700, fontSize: '10px', letterSpacing: '0.12em', color: '#555', textTransform: 'uppercase', marginBottom: '6px', margin: '0 0 6px 0' }}>{k.label}</p>
+            <p style={{ fontSize: '22px', fontWeight: 700, color: k.green ? '#22c55e' : '#f5f5f8', margin: '0 0 2px 0' }}>{k.value}</p>
+            <p style={{ fontSize: '11px', color: '#555', margin: 0 }}>{k.sub}</p>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '24px' }}>
+        {[
+          { label: 'All Time — Revenue', value: formatKES(totalsAll.revenue) },
+          { label: 'All Time — Rent', value: formatKES(totalsAll.rent) },
+          { label: 'All Time — Net', value: formatKES(totalsAll.net), green: true },
+        ].map(k => (
+          <div key={k.label} style={{ background: '#111', border: '1px solid #222', borderRadius: '8px', padding: '12px 16px' }}>
+            <p style={{ fontFamily: 'Oswald, sans-serif', fontWeight: 700, fontSize: '10px', letterSpacing: '0.12em', color: '#555', textTransform: 'uppercase', marginBottom: '4px', margin: '0 0 4px 0' }}>{k.label}</p>
+            <p style={{ fontSize: '18px', fontWeight: 700, color: k.green ? '#22c55e' : '#f5f5f8', margin: 0 }}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Search / filter */}
+      <div style={{ marginBottom: '16px' }}>
+        <input
+          type="text"
+          placeholder="Filter by client or method…"
+          value={filter}
+          onChange={e => setFilter(e.target.value)}
+          style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: '6px', padding: '8px 14px', color: '#f5f5f8', fontSize: '14px', width: '100%', boxSizing: 'border-box' }}
+        />
+      </div>
+
+      {/* Transaction ledger */}
+      {loading ? (
+        <p style={{ color: '#555', fontSize: '13px' }}>Loading transactions…</p>
+      ) : filtered.length === 0 ? (
+        <p style={{ color: '#555', fontSize: '13px', fontStyle: 'italic' }}>No transactions found.</p>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid #222' }}>
+                {['Date', 'Client', 'Plan', 'Amount', 'Method', 'Rent Split', 'Net Revenue', 'Source', 'Notes'].map(h => (
+                  <th key={h} style={{ textAlign: 'left', padding: '8px 10px', color: '#555', fontFamily: 'Oswald, sans-serif', fontWeight: 700, fontSize: '11px', letterSpacing: '0.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(p => (
+                <tr key={p.id} style={{ borderBottom: '1px solid #111' }}>
+                  <td style={{ padding: '8px 10px', color: '#f5f5f8', whiteSpace: 'nowrap' }}>{formatDate(new Date(p.payment_date))}</td>
+                  <td style={{ padding: '8px 10px', color: '#f5f5f8', whiteSpace: 'nowrap' }}>{p.clients?.full_name || '—'}</td>
+                  <td style={{ padding: '8px 10px', color: '#d3d3d3' }}>{p.plan_id || '—'}</td>
+                  <td style={{ padding: '8px 10px', color: '#f5f5f8', fontWeight: 600, whiteSpace: 'nowrap' }}>{formatKES(p.amount)}</td>
+                  <td style={{ padding: '8px 10px', color: '#d3d3d3', whiteSpace: 'nowrap' }}>{paymentMethodLabel(p.payment_method)}</td>
+                  <td style={{ padding: '8px 10px', color: p.rent_split > 0 ? '#fbbf24' : '#555', whiteSpace: 'nowrap' }}>{p.rent_split > 0 ? formatKES(p.rent_split) : '—'}</td>
+                  <td style={{ padding: '8px 10px', color: '#22c55e', fontWeight: 600, whiteSpace: 'nowrap' }}>{formatKES(p.net_revenue)}</td>
+                  <td style={{ padding: '8px 10px' }}>
+                    <span style={{ background: p.source === 'webhook' ? '#1e3a5f' : '#1a2e1a', color: p.source === 'webhook' ? '#93c5fd' : '#86efac', borderRadius: '4px', padding: '2px 6px', fontSize: '10px', fontWeight: 600, letterSpacing: '0.05em' }}>
+                      {p.source === 'webhook' ? 'AUTO' : 'MANUAL'}
+                    </span>
+                  </td>
+                  <td style={{ padding: '8px 10px', color: '#555', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.notes || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -803,6 +1158,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState('pending_review');
   const [activeSection, setActiveSection] = useState('applications');
+  const [activeTab, setActiveTab] = useState('applications');
   const [selectedClient, setSelectedClient] = useState(null);
 
   // Upload state
@@ -929,8 +1285,8 @@ export default function AdminPage() {
             {/* Header */}
             <div className="flex items-center justify-between mb-8">
               <div>
-                <h1 className="font-display font-black text-2xl tracking-widest">APPLICATIONS</h1>
-                <p className="text-secondary font-body text-sm mt-1">Review and manage client applications.</p>
+                <h1 className="font-display font-black text-2xl tracking-widest">AMSC ADMIN</h1>
+                <p className="text-secondary font-body text-sm mt-1">Manage clients, applications and revenue.</p>
               </div>
               <button
                 onClick={fetchClients}
@@ -940,6 +1296,41 @@ export default function AdminPage() {
               </button>
             </div>
 
+            {/* Top-level tab switcher: Applications | Revenue */}
+            <div style={{ display: 'flex', gap: '4px', marginBottom: '20px', borderBottom: '1px solid #222', paddingBottom: '0' }}>
+              {[['applications', 'Applications'], ['revenue', 'Revenue']].map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setActiveTab(key)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: activeTab === key ? '#f5f5f8' : '#555',
+                    fontFamily: 'Oswald, sans-serif',
+                    fontWeight: 700,
+                    fontSize: '14px',
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                    padding: '8px 16px 10px',
+                    cursor: 'pointer',
+                    borderBottom: activeTab === key ? '2px solid #a60a08' : '2px solid transparent',
+                    marginBottom: '-1px',
+                    transition: 'color 0.15s',
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* Revenue tab */}
+            {activeTab === 'revenue' && (
+              <RevenueView adminKey={adminKey} />
+            )}
+
+            {/* Applications tab */}
+            {activeTab === 'applications' && (
+              <>
             {/* Section tabs */}
             <div className="flex gap-1 mb-8 bg-surface border border-white/5 rounded-full p-1 w-fit">
               <button
@@ -1145,6 +1536,8 @@ export default function AdminPage() {
                   </div>
                 )}
               </div>
+            )}
+            </>
             )}
           </>
         )}
