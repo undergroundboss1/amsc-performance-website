@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
+import { trainingPlans } from '../../lib/plans';
 
 /**
  * /admin — Internal dashboard for reviewing applications.
@@ -9,6 +9,238 @@ import Link from 'next/link';
  * Protected by a simple password prompt (ADMIN_SECRET_KEY).
  * You and your assistant can use this on any device — phone, laptop, tablet.
  */
+
+// ─────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────
+
+function formatDate(date) {
+  return date.toLocaleDateString('en-KE', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function getPaymentTiming(client) {
+  if (!client.last_paid_at && !client.training_start_date) return null;
+
+  const now = new Date();
+  const lastPaid = client.last_paid_at ? new Date(client.last_paid_at) : null;
+  const isAutoRenew = client.payment_provider === 'paystack'; // card — Paystack handles renewals
+
+  // If training_start_date is set, use it as the billing cycle anchor.
+  // This factors in days trained before payment — the cycle counts from when
+  // training actually started, not when payment was received.
+  // If not set, fall back to last_paid_at (standard behaviour).
+  const cycleAnchor = client.training_start_date
+    ? new Date(client.training_start_date)
+    : lastPaid;
+
+  // Find the next 30-day boundary from cycleAnchor that is still in the future.
+  const MS_PER_CYCLE = 30 * 24 * 60 * 60 * 1000;
+  const msElapsed = now - cycleAnchor;
+  const cyclesCompleted = Math.max(0, Math.floor(msElapsed / MS_PER_CYCLE));
+  const nextDue = new Date(cycleAnchor.getTime() + (cyclesCompleted + 1) * MS_PER_CYCLE);
+
+  const daysUntilDue = Math.ceil((nextDue - now) / (1000 * 60 * 60 * 24));
+  const daysOverdue = daysUntilDue < 0 ? Math.abs(daysUntilDue) : 0;
+  const usingStartDate = !!client.training_start_date;
+
+  return { lastPaid, nextDue, daysUntilDue, daysOverdue, isAutoRenew, cycleAnchor, usingStartDate };
+}
+
+function providerLabel(provider) {
+  if (provider === 'paystack') return 'Card (auto-renews)';
+  if (provider === 'paystack_mpesa') return 'M-Pesa (manual)';
+  if (provider === 'intasend') return 'IntaSend';
+  return '—';
+}
+
+// ─────────────────────────────────────────────────────────────
+// PaymentTimingBar — shown on card and in detail view
+// ─────────────────────────────────────────────────────────────
+
+function PaymentTimingBar({ client, detailed = false }) {
+  const timing = getPaymentTiming(client);
+  const isOverdue = client.payment_status === 'overdue';
+
+  if (!timing && !isOverdue) return null;
+  if (client.payment_status === 'pending' || client.payment_status === 'cancelled') return null;
+
+  let dueLabelColor = 'text-white/40';
+  let dueValue = null;
+  let dueLabel = null;
+
+  if (timing) {
+    if (timing.isAutoRenew) {
+      dueValue = formatDate(timing.nextDue);
+      dueLabel = 'Auto-renews';
+      dueLabelColor = 'text-white/40';
+    } else if (timing.daysOverdue > 0 || isOverdue) {
+      const days = timing ? timing.daysOverdue : '—';
+      dueValue = `${days} day${days !== 1 ? 's' : ''} overdue`;
+      dueLabel = 'Status';
+      dueLabelColor = 'text-[#a60a08]';
+    } else if (timing.daysUntilDue <= 7) {
+      dueValue = `Due in ${timing.daysUntilDue} day${timing.daysUntilDue !== 1 ? 's' : ''}`;
+      dueLabel = 'Next Due';
+      dueLabelColor = 'text-yellow-400';
+    } else {
+      dueValue = formatDate(timing.nextDue);
+      dueLabel = 'Next Due';
+      dueLabelColor = 'text-white/40';
+    }
+  }
+
+  return (
+    <div className={`grid grid-cols-${dueValue ? '3' : '2'} gap-3 rounded-lg p-3 mb-4 ${
+      isOverdue || (timing && timing.daysOverdue > 0)
+        ? 'bg-red-900/10 border border-red-500/15'
+        : timing && timing.daysUntilDue <= 7 && !timing.isAutoRenew
+        ? 'bg-yellow-500/5 border border-yellow-500/15'
+        : 'bg-surface-light border border-white/5'
+    }`}>
+      {/* Last Paid */}
+      <div>
+        <span className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">
+          Last Paid
+        </span>
+        <span className="text-white text-sm font-body">
+          {timing ? formatDate(timing.lastPaid) : '—'}
+        </span>
+      </div>
+
+      {/* Next Due / Auto-renews */}
+      {dueValue && (
+        <div>
+          <span className={`text-[10px] font-display font-bold tracking-widest uppercase block mb-1 ${dueLabelColor}`}>
+            {dueLabel}
+          </span>
+          <span className={`text-sm font-body font-semibold ${
+            isOverdue || (timing && timing.daysOverdue > 0)
+              ? 'text-[#a60a08]'
+              : timing && timing.daysUntilDue <= 7 && !timing.isAutoRenew
+              ? 'text-yellow-400'
+              : 'text-white'
+          }`}>
+            {dueValue}
+          </span>
+        </div>
+      )}
+
+      {/* Provider or Cycle Anchor indicator */}
+      {detailed && (
+        <div>
+          <span className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">
+            {timing?.usingStartDate ? 'Cycle Anchor' : 'Method'}
+          </span>
+          <span className="text-white text-sm font-body">
+            {timing?.usingStartDate
+              ? <span className="text-accent/80 text-xs">From start date</span>
+              : providerLabel(client.payment_provider)
+            }
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// PaymentLinkBox — reused in card, detail view, plan change
+// ─────────────────────────────────────────────────────────────
+
+function PaymentLinkBox({ paymentLink, client, label = 'Payment Link Generated — Send to Client' }) {
+  const [copied, setCopied] = useState(false);
+
+  function copyLink() {
+    navigator.clipboard.writeText(paymentLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  const firstName = client.full_name?.split(' ')[0] || '';
+  const phone = client.phone?.replace(/[\s\-()+]/g, '') || '';
+
+  return (
+    <div className="bg-green-900/20 border border-green-500/20 rounded-lg p-4 mb-4">
+      <p className="text-green-400 text-xs font-display font-bold tracking-widest uppercase mb-3">
+        {label}
+      </p>
+      <div className="flex flex-wrap gap-2 mb-3">
+        <a
+          href={`https://wa.me/${phone}?text=${encodeURIComponent(
+            `Hi ${firstName},\n\nClick the link below to complete your AMSC payment and get started:\n${paymentLink}\n\n— AMSC Performance`
+          )}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex-1 min-w-[140px] bg-green-600 text-white px-4 py-2.5 rounded-lg font-display text-xs font-bold tracking-wider uppercase hover:bg-green-700 transition-colors cursor-pointer text-center"
+        >
+          Send via WhatsApp
+        </a>
+        <a
+          href={`mailto:${client.email}?subject=${encodeURIComponent('AMSC Performance — Payment Link')}&body=${encodeURIComponent(
+            `Hi ${firstName},\n\nClick the link below to complete your AMSC payment:\n${paymentLink}\n\n— AMSC Performance`
+          )}`}
+          className="flex-1 min-w-[140px] bg-blue-600 text-white px-4 py-2.5 rounded-lg font-display text-xs font-bold tracking-wider uppercase hover:bg-blue-700 transition-colors cursor-pointer text-center"
+        >
+          Send via Email
+        </a>
+        <button
+          onClick={copyLink}
+          className="px-4 py-2.5 bg-surface border border-white/10 text-white rounded-lg font-display text-xs font-bold tracking-wider uppercase hover:border-white/30 transition-colors cursor-pointer"
+        >
+          {copied ? 'Copied!' : 'Copy Link'}
+        </button>
+      </div>
+      <input
+        type="text"
+        value={paymentLink}
+        readOnly
+        className="w-full bg-surface border border-white/10 rounded-lg px-3 py-2 text-white/50 font-body text-xs focus:outline-none"
+      />
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Status badge helpers
+// ─────────────────────────────────────────────────────────────
+
+const appStatusColors = {
+  pending_review: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+  approved: 'bg-green-500/20 text-green-400 border-green-500/30',
+  declined: 'bg-red-500/20 text-red-400 border-red-500/30',
+};
+
+const paymentStatusColors = {
+  paid: 'bg-green-500/20 text-green-400 border-green-500/30',
+  overdue: 'bg-red-500/20 text-[#a60a08] border-red-500/30',
+  cancelled: 'bg-white/5 text-white/40 border-white/10',
+  failed: 'bg-red-500/20 text-red-400 border-red-500/30',
+  pending: null, // don't show
+};
+
+function StatusBadges({ client }) {
+  const payColor = paymentStatusColors[client.payment_status];
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className={`text-[10px] font-display font-bold tracking-widest uppercase px-3 py-1 rounded-full border ${appStatusColors[client.application_status] || appStatusColors.pending_review}`}>
+        {client.application_status?.replace('_', ' ')}
+      </span>
+      {payColor && (
+        <span className={`text-[10px] font-display font-bold tracking-widest uppercase px-3 py-1 rounded-full border ${payColor}`}>
+          {client.payment_status}
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// LoginScreen
+// ─────────────────────────────────────────────────────────────
 
 function LoginScreen({ onLogin, error }) {
   const [password, setPassword] = useState('');
@@ -43,33 +275,27 @@ function LoginScreen({ onLogin, error }) {
   );
 }
 
-function ApplicationCard({ client, adminKey, onUpdate }) {
+// ─────────────────────────────────────────────────────────────
+// ApplicationCard — compact list card, clickable
+// ─────────────────────────────────────────────────────────────
+
+function ApplicationCard({ client, adminKey, onUpdate, onClick }) {
   const [loading, setLoading] = useState(false);
   const [paymentLink, setPaymentLink] = useState(null);
-  const [copied, setCopied] = useState(false);
 
-  async function handleAction(action) {
+  async function handleAction(e, action) {
+    e.stopPropagation(); // don't open detail view when clicking an action button
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/${action}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${adminKey}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminKey}` },
         body: JSON.stringify({ clientId: client.id }),
       });
       const data = await res.json();
-
-      if (!res.ok) {
-        alert(data.error || 'Action failed.');
-        return;
-      }
-
+      if (!res.ok) { alert(data.error || 'Action failed.'); return; }
       if (action === 'approve' && data.paymentUrl) {
         setPaymentLink(data.paymentUrl);
-        // Don't refresh the list — card would disappear from pending_review filter
-        // before the user can copy/send the link. They can refresh manually.
       } else {
         onUpdate();
       }
@@ -80,135 +306,64 @@ function ApplicationCard({ client, adminKey, onUpdate }) {
     }
   }
 
-  function copyLink() {
-    navigator.clipboard.writeText(paymentLink);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
-  const statusColors = {
-    pending_review: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-    approved: 'bg-green-500/20 text-green-400 border-green-500/30',
-    declined: 'bg-red-500/20 text-red-400 border-red-500/30',
-  };
-
-  const paymentColors = {
-    pending: 'text-yellow-400',
-    paid: 'text-green-400',
-    failed: 'text-red-400',
-  };
+  const planName = trainingPlans.find(p => p.id === client.selected_plan)?.name || client.selected_plan;
 
   return (
-    <div className="bg-surface border border-white/5 rounded-xl p-6 mb-4">
+    <div
+      className="bg-surface border border-white/5 rounded-xl p-6 mb-4 cursor-pointer hover:border-white/15 transition-colors group"
+      onClick={onClick}
+    >
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
         <div>
-          <h3 className="font-display font-bold text-lg text-white">{client.full_name}</h3>
+          <h3 className="font-display font-bold text-lg text-white group-hover:text-accent transition-colors">
+            {client.full_name}
+          </h3>
           <p className="text-secondary text-sm font-body">{client.email} &middot; {client.phone}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className={`text-[10px] font-display font-bold tracking-widest uppercase px-3 py-1 rounded-full border ${statusColors[client.application_status] || statusColors.pending_review}`}>
-            {client.application_status?.replace('_', ' ')}
-          </span>
-          {client.payment_status === 'paid' && (
-            <span className="text-[10px] font-display font-bold tracking-widest uppercase px-3 py-1 rounded-full border bg-green-500/20 text-green-400 border-green-500/30">
-              Paid
-            </span>
-          )}
-        </div>
+        <StatusBadges client={client} />
       </div>
 
       {/* Details Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
         <div className="bg-surface-light rounded-lg p-3">
           <span className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">Plan</span>
-          <span className="text-white text-sm font-body">{client.selected_plan} &middot; KES {client.plan_price?.toLocaleString()}</span>
+          <span className="text-white text-sm font-body">{planName} &middot; KES {client.plan_price?.toLocaleString()}</span>
         </div>
         <div className="bg-surface-light rounded-lg p-3">
           <span className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">Sport</span>
           <span className="text-white text-sm font-body">{client.sport || '—'}</span>
         </div>
-        <div className="bg-surface-light rounded-lg p-3 sm:col-span-2">
-          <span className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">Training Goals</span>
-          <span className="text-white text-sm font-body">{client.training_goals || '—'}</span>
-        </div>
-        <div className="bg-surface-light rounded-lg p-3">
-          <span className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">Availability</span>
-          <span className="text-white text-sm font-body">{client.availability || '—'}</span>
-        </div>
-        <div className="bg-surface-light rounded-lg p-3">
-          <span className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">Health Info</span>
-          <span className="text-white text-sm font-body">{client.health_info || 'None'}</span>
-        </div>
-        {client.notes && (
-          <div className="bg-surface-light rounded-lg p-3 sm:col-span-2">
-            <span className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">Notes</span>
-            <span className="text-white text-sm font-body">{client.notes}</span>
-          </div>
-        )}
       </div>
+
+      {/* Payment timing */}
+      <PaymentTimingBar client={client} />
 
       <div className="text-white/20 text-xs font-body mb-4">
-        Applied {new Date(client.created_at).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+        Applied {new Date(client.created_at).toLocaleDateString('en-KE', {
+          day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+        })}
       </div>
 
-      {/* Payment Link + Send Options (shown after approve) */}
+      {/* Payment link (shown after approve) */}
       {paymentLink && (
-        <div className="bg-green-900/20 border border-green-500/20 rounded-lg p-4 mb-4">
-          <p className="text-green-400 text-xs font-display font-bold tracking-widest uppercase mb-3">Payment Link Generated — Send to Client</p>
-
-          {/* Send Buttons */}
-          <div className="flex flex-wrap gap-2 mb-3">
-            <a
-              href={`https://wa.me/${client.phone?.replace(/[\s\-()+ ]/g, '')}?text=${encodeURIComponent(
-                `Hi ${client.full_name.split(' ')[0]},\n\nGreat news — you've been approved to join AMSC Performance!\n\nClick the link below to complete your payment and get started:\n${paymentLink}\n\nWelcome to the system.`
-              )}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex-1 min-w-[140px] bg-green-600 text-white px-4 py-2.5 rounded-lg font-display text-xs font-bold tracking-wider uppercase hover:bg-green-700 transition-colors cursor-pointer text-center"
-            >
-              Send via WhatsApp
-            </a>
-            <a
-              href={`mailto:${client.email}?subject=${encodeURIComponent('AMSC Performance — You\'re Approved!')}&body=${encodeURIComponent(
-                `Hi ${client.full_name.split(' ')[0]},\n\nGreat news — you've been approved to join AMSC Performance!\n\nClick the link below to complete your payment and get started:\n${paymentLink}\n\nOnce you've paid, we'll get you set up on Trainerize and share your first session details.\n\nWelcome to the system.\n\n— AMSC Performance`
-              )}`}
-              className="flex-1 min-w-[140px] bg-blue-600 text-white px-4 py-2.5 rounded-lg font-display text-xs font-bold tracking-wider uppercase hover:bg-blue-700 transition-colors cursor-pointer text-center"
-            >
-              Send via Email
-            </a>
-            <button
-              onClick={copyLink}
-              className="px-4 py-2.5 bg-surface border border-white/10 text-white rounded-lg font-display text-xs font-bold tracking-wider uppercase hover:border-white/30 transition-colors cursor-pointer"
-            >
-              {copied ? 'Copied!' : 'Copy Link'}
-            </button>
-          </div>
-
-          {/* Link preview */}
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={paymentLink}
-              readOnly
-              className="flex-1 bg-surface border border-white/10 rounded-lg px-3 py-2 text-white/50 font-body text-xs focus:outline-none"
-            />
-          </div>
+        <div onClick={e => e.stopPropagation()}>
+          <PaymentLinkBox paymentLink={paymentLink} client={client} />
         </div>
       )}
 
       {/* Actions */}
       {client.application_status === 'pending_review' && (
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3" onClick={e => e.stopPropagation()}>
           <button
-            onClick={() => handleAction('approve')}
+            onClick={(e) => handleAction(e, 'approve')}
             disabled={loading}
             className="flex-1 bg-green-600 text-white font-display font-bold text-sm tracking-wider uppercase py-3 rounded-full hover:bg-green-700 transition-all cursor-pointer disabled:opacity-50"
           >
             {loading ? 'Processing...' : 'Approve & Get Payment Link'}
           </button>
           <button
-            onClick={() => handleAction('decline')}
+            onClick={(e) => handleAction(e, 'decline')}
             disabled={loading}
             className="px-6 py-3 border border-white/10 text-secondary font-display font-bold text-sm tracking-wider uppercase rounded-full hover:border-red-500/50 hover:text-red-400 transition-all cursor-pointer disabled:opacity-50"
           >
@@ -217,19 +372,428 @@ function ApplicationCard({ client, adminKey, onUpdate }) {
         </div>
       )}
 
-      {/* Re-copy link for already approved */}
       {client.application_status === 'approved' && client.payment_status !== 'paid' && !paymentLink && (
         <button
-          onClick={() => handleAction('approve')}
+          onClick={(e) => handleAction(e, 'approve')}
           disabled={loading}
           className="w-full bg-surface-light border border-white/10 text-white font-display font-bold text-sm tracking-wider uppercase py-3 rounded-full hover:border-green-500/30 transition-all cursor-pointer disabled:opacity-50"
         >
           {loading ? 'Loading...' : 'Get Payment Link Again'}
         </button>
       )}
+
+      {/* Tap hint */}
+      <p className="text-white/15 text-xs font-body text-right mt-3">Tap to view details →</p>
     </div>
   );
 }
+
+// ─────────────────────────────────────────────────────────────
+// ClientDetailView — full detail panel
+// ─────────────────────────────────────────────────────────────
+
+function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate }) {
+  const [client, setClient] = useState(initialClient);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [paymentLink, setPaymentLink] = useState(null);
+
+  // Plan change state
+  const [selectedPlan, setSelectedPlan] = useState(client.selected_plan);
+  const [planChanging, setPlanChanging] = useState(false);
+  const [planChangeResult, setPlanChangeResult] = useState(null); // { success, message, paymentUrl, subscriptionCancelled }
+
+  // Training start date state
+  const [startDate, setStartDate] = useState(
+    client.training_start_date
+      ? new Date(client.training_start_date).toISOString().split('T')[0]
+      : ''
+  );
+  const [startDateSaving, setStartDateSaving] = useState(false);
+  const [startDateResult, setStartDateResult] = useState(null); // { success, message }
+
+  const isCardClient = client.payment_provider === 'paystack';
+  const planChanged = selectedPlan !== client.selected_plan;
+  const selectedPlanObj = trainingPlans.find(p => p.id === selectedPlan);
+
+  async function handleAction(action) {
+    setActionLoading(true);
+    try {
+      const res = await fetch(`/api/admin/${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminKey}` },
+        body: JSON.stringify({ clientId: client.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error || 'Action failed.'); return; }
+      if (action === 'approve' && data.paymentUrl) {
+        setPaymentLink(data.paymentUrl);
+        setClient(c => ({ ...c, application_status: 'approved' }));
+      } else {
+        onUpdate();
+        onBack();
+      }
+    } catch {
+      alert('Network error. Please try again.');
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function saveStartDate() {
+    setStartDateSaving(true);
+    setStartDateResult(null);
+    try {
+      const res = await fetch('/api/admin/update-client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminKey}` },
+        body: JSON.stringify({
+          clientId: client.id,
+          trainingStartDate: startDate || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setStartDateResult({ success: false, message: data.error || 'Failed to save.' });
+        return;
+      }
+      // Update local client so timing recalculates immediately
+      setClient(c => ({ ...c, training_start_date: startDate || null }));
+      setStartDateResult({ success: true, message: startDate ? 'Training start date saved.' : 'Start date cleared.' });
+      onUpdate();
+    } catch {
+      setStartDateResult({ success: false, message: 'Network error. Please try again.' });
+    } finally {
+      setStartDateSaving(false);
+    }
+  }
+
+  async function handlePlanChange() {
+    if (!planChanged || !selectedPlanObj) return;
+    setPlanChanging(true);
+    setPlanChangeResult(null);
+    try {
+      const res = await fetch('/api/admin/change-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminKey}` },
+        body: JSON.stringify({ clientId: client.id, newPlanId: selectedPlan }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setPlanChangeResult({ success: false, message: data.error || 'Plan change failed.' });
+        return;
+      }
+      // Update local client state with new plan
+      setClient(c => ({
+        ...c,
+        selected_plan: selectedPlanObj.id,
+        plan_price: selectedPlanObj.price,
+        ...(data.paymentUrl ? { payment_status: 'pending', paystack_subscription_code: null } : {}),
+      }));
+      setPlanChangeResult({
+        success: true,
+        message: data.message,
+        paymentUrl: data.paymentUrl || null,
+        subscriptionCancelled: data.subscriptionCancelled,
+      });
+      onUpdate(); // refresh background list
+    } catch {
+      setPlanChangeResult({ success: false, message: 'Network error. Please try again.' });
+    } finally {
+      setPlanChanging(false);
+    }
+  }
+
+  const planName = trainingPlans.find(p => p.id === client.selected_plan)?.name || client.selected_plan;
+  const timing = getPaymentTiming(client);
+
+  return (
+    <div className="max-w-3xl mx-auto">
+      {/* Back button + header */}
+      <div className="flex items-center gap-4 mb-8">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-2 text-secondary hover:text-white font-display font-bold text-xs tracking-widest uppercase transition-colors cursor-pointer"
+        >
+          ← Back
+        </button>
+        <div className="h-4 w-px bg-white/10" />
+        <h1 className="font-display font-black text-2xl tracking-widest text-white flex-1">
+          {client.full_name}
+        </h1>
+        <StatusBadges client={client} />
+      </div>
+
+      {/* ── CONTACT ──────────────────────────────────────────── */}
+      <div className="bg-surface border border-white/5 rounded-xl p-6 mb-4">
+        <p className="text-[10px] font-display font-bold tracking-widest uppercase text-accent mb-4">Contact</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="bg-surface-light rounded-lg p-3">
+            <span className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">Email</span>
+            <span className="text-white text-sm font-body">{client.email}</span>
+          </div>
+          <div className="bg-surface-light rounded-lg p-3">
+            <span className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">Phone</span>
+            <span className="text-white text-sm font-body">{client.phone}</span>
+          </div>
+          <div className="bg-surface-light rounded-lg p-3">
+            <span className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">Applied</span>
+            <span className="text-white text-sm font-body">
+              {new Date(client.created_at).toLocaleDateString('en-KE', {
+                day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+              })}
+            </span>
+          </div>
+          <div className="bg-surface-light rounded-lg p-3">
+            <span className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">Sport</span>
+            <span className="text-white text-sm font-body">{client.sport || '—'}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── TRAINING PROFILE ─────────────────────────────────── */}
+      <div className="bg-surface border border-white/5 rounded-xl p-6 mb-4">
+        <p className="text-[10px] font-display font-bold tracking-widest uppercase text-accent mb-4">Training Profile</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="bg-surface-light rounded-lg p-3 sm:col-span-2">
+            <span className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">Training Goals</span>
+            <span className="text-white text-sm font-body">{client.training_goals || '—'}</span>
+          </div>
+          <div className="bg-surface-light rounded-lg p-3">
+            <span className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">Availability</span>
+            <span className="text-white text-sm font-body">{client.availability || '—'}</span>
+          </div>
+          <div className="bg-surface-light rounded-lg p-3">
+            <span className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">Health Info</span>
+            <span className="text-white text-sm font-body">{client.health_info || 'None declared'}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── PLAN & FINANCIALS ────────────────────────────────── */}
+      <div className="bg-surface border border-white/5 rounded-xl p-6 mb-4">
+        <p className="text-[10px] font-display font-bold tracking-widest uppercase text-accent mb-4">Plan & Financials</p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+          <div className="bg-surface-light rounded-lg p-3">
+            <span className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">Current Plan</span>
+            <span className="text-white text-sm font-body font-semibold">{planName}</span>
+          </div>
+          <div className="bg-surface-light rounded-lg p-3">
+            <span className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">Monthly Fee</span>
+            <span className="text-white text-sm font-body font-semibold">KES {client.plan_price?.toLocaleString()}</span>
+          </div>
+          <div className="bg-surface-light rounded-lg p-3">
+            <span className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">Payment Method</span>
+            <span className="text-white text-sm font-body">{providerLabel(client.payment_provider)}</span>
+          </div>
+        </div>
+
+        {/* Payment timing — detailed mode shows provider */}
+        <PaymentTimingBar client={client} detailed />
+
+        {/* Explicit overdue callout */}
+        {client.payment_status === 'overdue' && timing && (
+          <div className="bg-red-900/15 border border-red-500/20 rounded-lg px-4 py-3 mb-4">
+            <p className="text-[#a60a08] text-sm font-display font-bold tracking-wider uppercase">
+              {timing.daysOverdue} day{timing.daysOverdue !== 1 ? 's' : ''} overdue
+            </p>
+            <p className="text-white/50 text-xs font-body mt-1">
+              Was due {formatDate(timing.nextDue)}. Send a payment reminder.
+            </p>
+          </div>
+        )}
+
+        {/* Training Start Date editor */}
+        <div className="border-t border-white/5 pt-4">
+          <p className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 mb-1">
+            Training Start Date
+          </p>
+          <p className="text-white/30 text-xs font-body mb-3">
+            Set this if the client began training before paying. The billing cycle
+            will anchor to this date so pre-payment days are counted.
+            {client.training_start_date && (
+              <span className="text-accent/70 ml-1">
+                Currently set — next due calculated from {formatDate(new Date(client.training_start_date))}.
+              </span>
+            )}
+          </p>
+          <div className="flex items-center gap-3">
+            <input
+              type="date"
+              value={startDate}
+              onChange={e => { setStartDate(e.target.value); setStartDateResult(null); }}
+              className="flex-1 bg-background border border-white/10 rounded-lg px-4 py-2.5 text-white font-body text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all"
+            />
+            {startDate && (
+              <button
+                onClick={() => { setStartDate(''); setStartDateResult(null); }}
+                className="px-3 py-2.5 text-white/30 hover:text-white/60 font-body text-xs transition-colors cursor-pointer"
+                title="Clear start date"
+              >
+                ✕ Clear
+              </button>
+            )}
+            <button
+              onClick={saveStartDate}
+              disabled={startDateSaving}
+              className="px-5 py-2.5 bg-accent text-white font-display font-bold text-xs tracking-wider uppercase rounded-lg hover:bg-accent-dark transition-all cursor-pointer disabled:opacity-50"
+            >
+              {startDateSaving ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+          {startDateResult && (
+            <p className={`text-xs font-body mt-2 ${startDateResult.success ? 'text-green-400' : 'text-red-400'}`}>
+              {startDateResult.message}
+            </p>
+          )}
+        </div>
+
+        {/* Raw notes (payment confirmation string from Paystack) */}
+        {client.notes && (
+          <div className="bg-surface-light rounded-lg p-3 mt-4">
+            <span className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">Payment Record</span>
+            <span className="text-white/50 text-xs font-body">{client.notes}</span>
+          </div>
+        )}
+      </div>
+
+      {/* ── CHANGE PLAN ──────────────────────────────────────── */}
+      {client.application_status === 'approved' && (
+        <div className="bg-surface border border-white/5 rounded-xl p-6 mb-4">
+          <p className="text-[10px] font-display font-bold tracking-widest uppercase text-accent mb-4">Change Plan</p>
+
+          <div className="mb-4">
+            <label className="block text-xs font-display font-semibold tracking-wider text-secondary mb-2">
+              Training Plan
+            </label>
+            <select
+              value={selectedPlan}
+              onChange={e => { setSelectedPlan(e.target.value); setPlanChangeResult(null); }}
+              className="w-full bg-background border border-white/10 rounded-lg px-4 py-3 text-white font-body text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all cursor-pointer"
+            >
+              {trainingPlans.map(plan => (
+                <option key={plan.id} value={plan.id}>
+                  {plan.name} — KES {plan.price.toLocaleString()}/month
+                  {plan.id === client.selected_plan ? ' (current)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Card subscription warning */}
+          {planChanged && isCardClient && client.paystack_subscription_code && (
+            <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-lg px-4 py-3 mb-4">
+              <p className="text-yellow-400 text-xs font-display font-bold tracking-widest uppercase mb-1">
+                Card Subscription — Action Required
+              </p>
+              <p className="text-white/50 text-xs font-body">
+                This will attempt to cancel their current Paystack subscription and generate
+                a new payment link for the new plan. Send them the new link after saving.
+              </p>
+            </div>
+          )}
+
+          {/* Price change preview */}
+          {planChanged && selectedPlanObj && (
+            <div className="flex items-center gap-3 mb-4 text-sm font-body">
+              <span className="text-white/40">KES {client.plan_price?.toLocaleString()}</span>
+              <span className="text-white/20">→</span>
+              <span className="text-white font-semibold">KES {selectedPlanObj.price.toLocaleString()}</span>
+              <span className="text-secondary">/ month</span>
+            </div>
+          )}
+
+          {/* Plan change result */}
+          {planChangeResult && (
+            <div className={`rounded-lg px-4 py-3 mb-4 ${planChangeResult.success ? 'bg-green-900/20 border border-green-500/20' : 'bg-red-900/20 border border-red-500/20'}`}>
+              <p className={`text-xs font-display font-bold tracking-widest uppercase mb-1 ${planChangeResult.success ? 'text-green-400' : 'text-red-400'}`}>
+                {planChangeResult.success ? 'Plan Updated' : 'Error'}
+              </p>
+              <p className="text-white/60 text-xs font-body">{planChangeResult.message}</p>
+              {planChangeResult.success && isCardClient && !planChangeResult.subscriptionCancelled && (
+                <p className="text-yellow-400 text-xs font-body mt-2">
+                  ⚠ Could not auto-cancel the old subscription. Cancel it manually in the Paystack dashboard.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* New payment link from plan change */}
+          {planChangeResult?.success && planChangeResult.paymentUrl && (
+            <PaymentLinkBox
+              paymentLink={planChangeResult.paymentUrl}
+              client={client}
+              label="New Payment Link — Send to Client"
+            />
+          )}
+
+          <button
+            onClick={handlePlanChange}
+            disabled={!planChanged || planChanging}
+            className="w-full bg-accent text-white font-display font-bold text-sm tracking-wider uppercase py-3 rounded-full hover:bg-accent-dark transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            {planChanging ? 'Saving...' : planChanged ? `Save — Switch to ${selectedPlanObj?.name}` : 'No Changes'}
+          </button>
+        </div>
+      )}
+
+      {/* ── ACTIONS ──────────────────────────────────────────── */}
+      <div className="bg-surface border border-white/5 rounded-xl p-6 mb-8">
+        <p className="text-[10px] font-display font-bold tracking-widest uppercase text-accent mb-4">Actions</p>
+
+        {/* Payment link from approve action */}
+        {paymentLink && (
+          <PaymentLinkBox paymentLink={paymentLink} client={client} />
+        )}
+
+        {client.application_status === 'pending_review' && (
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => handleAction('approve')}
+              disabled={actionLoading}
+              className="flex-1 bg-green-600 text-white font-display font-bold text-sm tracking-wider uppercase py-3 rounded-full hover:bg-green-700 transition-all cursor-pointer disabled:opacity-50"
+            >
+              {actionLoading ? 'Processing...' : 'Approve & Get Payment Link'}
+            </button>
+            <button
+              onClick={() => handleAction('decline')}
+              disabled={actionLoading}
+              className="px-6 py-3 border border-white/10 text-secondary font-display font-bold text-sm tracking-wider uppercase rounded-full hover:border-red-500/50 hover:text-red-400 transition-all cursor-pointer disabled:opacity-50"
+            >
+              Decline
+            </button>
+          </div>
+        )}
+
+        {client.application_status === 'approved' && client.payment_status !== 'paid' && !paymentLink && (
+          <button
+            onClick={() => handleAction('approve')}
+            disabled={actionLoading}
+            className="w-full bg-surface-light border border-white/10 text-white font-display font-bold text-sm tracking-wider uppercase py-3 rounded-full hover:border-green-500/30 transition-all cursor-pointer disabled:opacity-50"
+          >
+            {actionLoading ? 'Loading...' : 'Get Payment Link Again'}
+          </button>
+        )}
+
+        {client.application_status === 'approved' && client.payment_status === 'paid' && (
+          <p className="text-white/30 text-sm font-body text-center py-2">
+            Client is active and paid. No actions required.
+          </p>
+        )}
+
+        {client.application_status === 'declined' && (
+          <p className="text-white/30 text-sm font-body text-center py-2">
+            Application was declined.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// AdminPage — root component
+// ─────────────────────────────────────────────────────────────
 
 export default function AdminPage() {
   const [adminKey, setAdminKey] = useState('');
@@ -239,6 +803,9 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState('pending_review');
   const [activeSection, setActiveSection] = useState('applications');
+  const [selectedClient, setSelectedClient] = useState(null);
+
+  // Upload state
   const [uploadFile, setUploadFile] = useState(null);
   const [uploadDate, setUploadDate] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -247,10 +814,7 @@ export default function AdminPage() {
   const [uploadAthleteErrors, setUploadAthleteErrors] = useState([]);
 
   function handleLogin(password) {
-    if (!password.trim()) {
-      setLoginError('Please enter a password.');
-      return;
-    }
+    if (!password.trim()) { setLoginError('Please enter a password.'); return; }
     setAdminKey(password);
     setAuthenticated(true);
     setLoginError('');
@@ -262,17 +826,13 @@ export default function AdminPage() {
       const res = await fetch(`/api/admin/clients?status=${filter}`, {
         headers: { Authorization: `Bearer ${adminKey}` },
       });
-
       if (res.status === 401) {
         setAuthenticated(false);
         setLoginError('Invalid password. Please try again.');
         return;
       }
-
       const data = await res.json();
-      if (res.ok) {
-        setClients(data.clients || []);
-      }
+      if (res.ok) setClients(data.clients || []);
     } catch {
       console.error('Failed to fetch clients');
     } finally {
@@ -287,7 +847,6 @@ export default function AdminPage() {
     setUploadResult(null);
     setUploadError('');
     setUploadAthleteErrors([]);
-
     try {
       const base64 = await new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -295,16 +854,11 @@ export default function AdminPage() {
         reader.onerror = reject;
         reader.readAsDataURL(uploadFile);
       });
-
       const res = await fetch('/api/admin/upload-results', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${adminKey}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminKey}` },
         body: JSON.stringify({ file: base64, filename: uploadFile.name, eventDate: uploadDate }),
       });
-
       const data = await res.json();
       if (!res.ok) {
         setUploadError(data.error || 'Upload failed.');
@@ -349,233 +903,251 @@ export default function AdminPage() {
   }
 
   const filterOptions = [
-    { value: 'pending_review', label: 'Pending Review', count: null },
-    { value: 'approved', label: 'Approved', count: null },
-    { value: 'declined', label: 'Declined', count: null },
-    { value: 'all', label: 'All', count: null },
+    { value: 'pending_review', label: 'Pending Review' },
+    { value: 'approved', label: 'Approved' },
+    { value: 'declined', label: 'Declined' },
+    { value: 'all', label: 'All' },
   ];
 
   return (
     <section className="py-8 px-4 sm:px-6 bg-background min-h-screen pt-20">
       <div className="max-w-3xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="font-display font-black text-2xl tracking-widest">APPLICATIONS</h1>
-            <p className="text-secondary font-body text-sm mt-1">Review and manage client applications.</p>
-          </div>
-          <button
-            onClick={fetchClients}
-            className="bg-surface-light border border-white/10 text-white px-4 py-2 rounded-lg font-display text-xs font-bold tracking-wider uppercase hover:border-white/20 transition-colors cursor-pointer"
-          >
-            Refresh
-          </button>
-        </div>
 
-        {/* Section tabs */}
-          <div className="flex gap-1 mb-8 bg-surface border border-white/5 rounded-full p-1 w-fit">
-            <button
-              onClick={() => setActiveSection('applications')}
-              className={`px-5 py-2 rounded-full text-sm font-display font-semibold tracking-wider transition-all duration-200 ${
-                activeSection === 'applications' ? 'bg-accent text-white' : 'text-secondary hover:text-white'
-              }`}
-            >
-              Applications
-            </button>
-            <button
-              onClick={() => setActiveSection('upload')}
-              className={`px-5 py-2 rounded-full text-sm font-display font-semibold tracking-wider transition-all duration-200 ${
-                activeSection === 'upload' ? 'bg-accent text-white' : 'text-secondary hover:text-white'
-              }`}
-            >
-              Upload Results
-            </button>
-          </div>
-
-        {activeSection === 'applications' && (
-          <div>
-        {/* Filter Tabs */}
-        <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-          {filterOptions.map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() => setFilter(opt.value)}
-              className={`px-4 py-2 rounded-full font-display text-xs font-bold tracking-wider uppercase transition-all cursor-pointer whitespace-nowrap ${
-                filter === opt.value
-                  ? 'bg-accent text-white'
-                  : 'bg-surface-light text-secondary border border-white/5 hover:border-white/20'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Client List */}
-        {loading ? (
-          <div className="text-center py-12">
-            <span className="inline-block w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin mb-4" />
-            <p className="text-secondary font-body text-sm">Loading applications...</p>
-          </div>
-        ) : clients.length === 0 ? (
-          <div className="text-center py-12 bg-surface border border-white/5 rounded-xl">
-            <p className="text-secondary font-body text-sm">No {filter === 'all' ? '' : filter.replace('_', ' ')} applications found.</p>
-          </div>
-        ) : (
-          clients.map((client) => (
-            <ApplicationCard
-              key={client.id}
-              client={client}
-              adminKey={adminKey}
-              onUpdate={fetchClients}
-            />
-          ))
-        )}
-          </div>
+        {/* ── Detail view ── */}
+        {selectedClient && (
+          <ClientDetailView
+            client={selectedClient}
+            adminKey={adminKey}
+            onBack={() => setSelectedClient(null)}
+            onUpdate={fetchClients}
+          />
         )}
 
-          {activeSection === 'upload' && (
-            <div>
-              {/* Template Download */}
-              <div className="flex items-center justify-between bg-surface border border-white/5 rounded-lg px-5 py-4 mb-4">
-                <div>
-                  <p className="font-display font-semibold text-sm tracking-wider text-white">AMSC Combine Data Template</p>
-                  <p className="text-secondary font-body text-xs mt-0.5">Fill this in after every session, then upload below.</p>
-                </div>
-                <a
-                  href="/AMSC_Combine_Data_Template.xlsx"
-                  download
-                  className="flex items-center gap-2 bg-accent text-white font-display font-bold text-xs tracking-wider uppercase px-4 py-2 rounded-full hover:bg-accent-dark transition-all whitespace-nowrap"
-                >
-                  ↓ Download Template
-                </a>
+        {/* ── List view ── */}
+        {!selectedClient && (
+          <>
+            {/* Header */}
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h1 className="font-display font-black text-2xl tracking-widest">APPLICATIONS</h1>
+                <p className="text-secondary font-body text-sm mt-1">Review and manage client applications.</p>
               </div>
+              <button
+                onClick={fetchClients}
+                className="bg-surface-light border border-white/10 text-white px-4 py-2 rounded-lg font-display text-xs font-bold tracking-wider uppercase hover:border-white/20 transition-colors cursor-pointer"
+              >
+                Refresh
+              </button>
+            </div>
 
-              <form onSubmit={handleUpload} className="bg-surface border border-white/5 rounded-lg p-6 mb-6">
-                <h2 className="font-display font-bold text-lg tracking-wider mb-6">UPLOAD COMBINE RESULTS</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <label className="block text-xs font-display font-semibold tracking-wider text-secondary mb-2">SESSION DATE</label>
-                    <input
-                      type="date"
-                      value={uploadDate}
-                      onChange={e => setUploadDate(e.target.value)}
-                      required
-                      className="w-full bg-background border border-white/10 rounded-lg px-4 py-3 text-text font-body text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-display font-semibold tracking-wider text-secondary mb-2">EXCEL FILE (.xlsx)</label>
-                    <input
-                      id="excel-upload"
-                      type="file"
-                      accept=".xlsx"
-                      onChange={e => setUploadFile(e.target.files[0] || null)}
-                      required
-                      className="w-full bg-background border border-white/10 rounded-lg px-4 py-3 text-text font-body text-sm focus:outline-none focus:border-accent transition-all file:mr-3 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-accent/20 file:text-accent hover:file:bg-accent/30"
-                    />
-                  </div>
-                </div>
-                {uploadFile && (
-                  <p className="text-secondary text-xs font-body mb-4">{uploadFile.name} — {(uploadFile.size / 1024).toFixed(0)} KB</p>
-                )}
-                <button
-                  type="submit"
-                  disabled={uploading || !uploadFile || !uploadDate}
-                  className="w-full bg-accent text-white py-3 rounded-full font-display font-bold text-sm tracking-wider uppercase hover:bg-accent-dark transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {uploading ? 'Processing…' : 'Process & Upload'}
-                </button>
-                {uploading && (
-                  <p className="text-secondary text-xs font-body text-center mt-3">
-                    Running engine — this may take 10–30 seconds on first run…
-                  </p>
-                )}
-              </form>
+            {/* Section tabs */}
+            <div className="flex gap-1 mb-8 bg-surface border border-white/5 rounded-full p-1 w-fit">
+              <button
+                onClick={() => setActiveSection('applications')}
+                className={`px-5 py-2 rounded-full text-sm font-display font-semibold tracking-wider transition-all duration-200 ${
+                  activeSection === 'applications' ? 'bg-accent text-white' : 'text-secondary hover:text-white'
+                }`}
+              >
+                Applications
+              </button>
+              <button
+                onClick={() => setActiveSection('upload')}
+                className={`px-5 py-2 rounded-full text-sm font-display font-semibold tracking-wider transition-all duration-200 ${
+                  activeSection === 'upload' ? 'bg-accent text-white' : 'text-secondary hover:text-white'
+                }`}
+              >
+                Upload Results
+              </button>
+            </div>
 
-              {uploadError && (
-                <div className="bg-red-900/20 border border-red-500/20 rounded-lg px-4 py-3 mb-6">
-                  <p className="text-red-400 text-sm font-body font-semibold">{uploadError}</p>
-                  {uploadAthleteErrors.length > 0 && (
-                    <ul className="mt-2 space-y-1">
-                      {uploadAthleteErrors.map((e, i) => (
-                        <li key={i} className="text-red-300 text-xs font-body">
-                          <span className="font-semibold">{e.name}:</span> {e.error}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
-
-              {uploadResult && (
-                <div className="bg-surface border border-white/5 rounded-lg p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h3 className="font-display font-bold text-lg tracking-wider">
-                        {uploadResult.inserted} athlete{uploadResult.inserted !== 1 ? 's' : ''} uploaded
-                      </h3>
-                      {uploadResult.errors?.length > 0 && (
-                        <p className="text-yellow-400 text-xs font-body mt-1">
-                          {uploadResult.errors.length} athlete(s) had errors and were skipped
-                        </p>
-                      )}
-                    </div>
+            {/* ── Applications section ── */}
+            {activeSection === 'applications' && (
+              <div>
+                <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+                  {filterOptions.map((opt) => (
                     <button
-                      onClick={() => downloadAccessCodes(uploadResult.results)}
-                      className="bg-accent/10 border border-accent/30 text-accent px-4 py-2 rounded-lg font-display font-bold text-xs tracking-wider uppercase hover:bg-accent hover:text-white transition-all duration-200"
+                      key={opt.value}
+                      onClick={() => setFilter(opt.value)}
+                      className={`px-4 py-2 rounded-full font-display text-xs font-bold tracking-wider uppercase transition-all cursor-pointer whitespace-nowrap ${
+                        filter === opt.value
+                          ? 'bg-accent text-white'
+                          : 'bg-surface-light text-secondary border border-white/5 hover:border-white/20'
+                      }`}
                     >
-                      Download Access Codes CSV
+                      {opt.label}
                     </button>
+                  ))}
+                </div>
+
+                {loading ? (
+                  <div className="text-center py-12">
+                    <span className="inline-block w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin mb-4" />
+                    <p className="text-secondary font-body text-sm">Loading applications...</p>
                   </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm font-body">
-                      <thead>
-                        <tr className="border-b border-white/10">
-                          <th className="text-left text-xs font-display tracking-wider text-secondary py-2 pr-4">ATHLETE</th>
-                          <th className="text-left text-xs font-display tracking-wider text-secondary py-2 pr-4">ACCESS CODE</th>
-                          <th className="text-left text-xs font-display tracking-wider text-secondary py-2 pr-4">ACCEL</th>
-                          <th className="text-left text-xs font-display tracking-wider text-secondary py-2 pr-4">MAX V</th>
-                          <th className="text-left text-xs font-display tracking-wider text-secondary py-2">POWER</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {uploadResult.results.map((r) => (
-                          <tr key={r.id} className="border-b border-white/5">
-                            <td className="py-2 pr-4 text-text">{r.athlete_name}</td>
-                            <td className="py-2 pr-4">
-                              <span className="font-mono text-accent text-xs bg-accent/10 px-2 py-1 rounded">{r.access_code}</span>
-                            </td>
-                            <td className={`py-2 pr-4 text-xs ${r.acceleration_category === 'Advanced' ? 'text-green-400' : r.acceleration_category === 'Competitive' ? 'text-yellow-400' : 'text-red-400'}`}>
-                              {r.acceleration_category || '—'}
-                            </td>
-                            <td className={`py-2 pr-4 text-xs ${r.max_velocity_category === 'Advanced' ? 'text-green-400' : r.max_velocity_category === 'Competitive' ? 'text-yellow-400' : 'text-red-400'}`}>
-                              {r.max_velocity_category || '—'}
-                            </td>
-                            <td className={`py-2 text-xs ${r.power_category === 'Advanced' ? 'text-green-400' : r.power_category === 'Competitive' ? 'text-yellow-400' : 'text-red-400'}`}>
-                              {r.power_category || '—'}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                ) : clients.length === 0 ? (
+                  <div className="text-center py-12 bg-surface border border-white/5 rounded-xl">
+                    <p className="text-secondary font-body text-sm">
+                      No {filter === 'all' ? '' : filter.replace('_', ' ')} applications found.
+                    </p>
                   </div>
-                  {uploadResult.warnings?.length > 0 && (
-                    <details className="mt-4">
-                      <summary className="text-yellow-400/70 text-xs font-body cursor-pointer hover:text-yellow-400">
-                        {uploadResult.warnings.length} data warning(s)
-                      </summary>
+                ) : (
+                  clients.map((client) => (
+                    <ApplicationCard
+                      key={client.id}
+                      client={client}
+                      adminKey={adminKey}
+                      onUpdate={fetchClients}
+                      onClick={() => setSelectedClient(client)}
+                    />
+                  ))
+                )}
+              </div>
+            )}
+
+            {/* ── Upload section ── */}
+            {activeSection === 'upload' && (
+              <div>
+                <div className="flex items-center justify-between bg-surface border border-white/5 rounded-lg px-5 py-4 mb-4">
+                  <div>
+                    <p className="font-display font-semibold text-sm tracking-wider text-white">AMSC Combine Data Template</p>
+                    <p className="text-secondary font-body text-xs mt-0.5">Fill this in after every session, then upload below.</p>
+                  </div>
+                  <a
+                    href="/AMSC_Combine_Data_Template.xlsx"
+                    download
+                    className="flex items-center gap-2 bg-accent text-white font-display font-bold text-xs tracking-wider uppercase px-4 py-2 rounded-full hover:bg-accent-dark transition-all whitespace-nowrap"
+                  >
+                    ↓ Download Template
+                  </a>
+                </div>
+
+                <form onSubmit={handleUpload} className="bg-surface border border-white/5 rounded-lg p-6 mb-6">
+                  <h2 className="font-display font-bold text-lg tracking-wider mb-6">UPLOAD COMBINE RESULTS</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label className="block text-xs font-display font-semibold tracking-wider text-secondary mb-2">SESSION DATE</label>
+                      <input
+                        type="date"
+                        value={uploadDate}
+                        onChange={e => setUploadDate(e.target.value)}
+                        required
+                        className="w-full bg-background border border-white/10 rounded-lg px-4 py-3 text-text font-body text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-display font-semibold tracking-wider text-secondary mb-2">EXCEL FILE (.xlsx)</label>
+                      <input
+                        id="excel-upload"
+                        type="file"
+                        accept=".xlsx"
+                        onChange={e => setUploadFile(e.target.files[0] || null)}
+                        required
+                        className="w-full bg-background border border-white/10 rounded-lg px-4 py-3 text-text font-body text-sm focus:outline-none focus:border-accent transition-all file:mr-3 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-accent/20 file:text-accent hover:file:bg-accent/30"
+                      />
+                    </div>
+                  </div>
+                  {uploadFile && (
+                    <p className="text-secondary text-xs font-body mb-4">{uploadFile.name} — {(uploadFile.size / 1024).toFixed(0)} KB</p>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={uploading || !uploadFile || !uploadDate}
+                    className="w-full bg-accent text-white py-3 rounded-full font-display font-bold text-sm tracking-wider uppercase hover:bg-accent-dark transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {uploading ? 'Processing…' : 'Process & Upload'}
+                  </button>
+                  {uploading && (
+                    <p className="text-secondary text-xs font-body text-center mt-3">
+                      Running engine — this may take 10–30 seconds on first run…
+                    </p>
+                  )}
+                </form>
+
+                {uploadError && (
+                  <div className="bg-red-900/20 border border-red-500/20 rounded-lg px-4 py-3 mb-6">
+                    <p className="text-red-400 text-sm font-body font-semibold">{uploadError}</p>
+                    {uploadAthleteErrors.length > 0 && (
                       <ul className="mt-2 space-y-1">
-                        {uploadResult.warnings.map((w, i) => (
-                          <li key={i} className="text-yellow-400/60 text-xs font-body">• {w}</li>
+                        {uploadAthleteErrors.map((e, i) => (
+                          <li key={i} className="text-red-300 text-xs font-body">
+                            <span className="font-semibold">{e.name}:</span> {e.error}
+                          </li>
                         ))}
                       </ul>
-                    </details>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
+                    )}
+                  </div>
+                )}
+
+                {uploadResult && (
+                  <div className="bg-surface border border-white/5 rounded-lg p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h3 className="font-display font-bold text-lg tracking-wider">
+                          {uploadResult.inserted} athlete{uploadResult.inserted !== 1 ? 's' : ''} uploaded
+                        </h3>
+                        {uploadResult.errors?.length > 0 && (
+                          <p className="text-yellow-400 text-xs font-body mt-1">
+                            {uploadResult.errors.length} athlete(s) had errors and were skipped
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => downloadAccessCodes(uploadResult.results)}
+                        className="bg-accent/10 border border-accent/30 text-accent px-4 py-2 rounded-lg font-display font-bold text-xs tracking-wider uppercase hover:bg-accent hover:text-white transition-all duration-200"
+                      >
+                        Download Access Codes CSV
+                      </button>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm font-body">
+                        <thead>
+                          <tr className="border-b border-white/10">
+                            <th className="text-left text-xs font-display tracking-wider text-secondary py-2 pr-4">ATHLETE</th>
+                            <th className="text-left text-xs font-display tracking-wider text-secondary py-2 pr-4">ACCESS CODE</th>
+                            <th className="text-left text-xs font-display tracking-wider text-secondary py-2 pr-4">ACCEL</th>
+                            <th className="text-left text-xs font-display tracking-wider text-secondary py-2 pr-4">MAX V</th>
+                            <th className="text-left text-xs font-display tracking-wider text-secondary py-2">POWER</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {uploadResult.results.map((r) => (
+                            <tr key={r.id} className="border-b border-white/5">
+                              <td className="py-2 pr-4 text-text">{r.athlete_name}</td>
+                              <td className="py-2 pr-4">
+                                <span className="font-mono text-accent text-xs bg-accent/10 px-2 py-1 rounded">{r.access_code}</span>
+                              </td>
+                              <td className={`py-2 pr-4 text-xs ${r.acceleration_category === 'Advanced' ? 'text-green-400' : r.acceleration_category === 'Competitive' ? 'text-yellow-400' : 'text-red-400'}`}>
+                                {r.acceleration_category || '—'}
+                              </td>
+                              <td className={`py-2 pr-4 text-xs ${r.max_velocity_category === 'Advanced' ? 'text-green-400' : r.max_velocity_category === 'Competitive' ? 'text-yellow-400' : 'text-red-400'}`}>
+                                {r.max_velocity_category || '—'}
+                              </td>
+                              <td className={`py-2 text-xs ${r.power_category === 'Advanced' ? 'text-green-400' : r.power_category === 'Competitive' ? 'text-yellow-400' : 'text-red-400'}`}>
+                                {r.power_category || '—'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {uploadResult.warnings?.length > 0 && (
+                      <details className="mt-4">
+                        <summary className="text-yellow-400/70 text-xs font-body cursor-pointer hover:text-yellow-400">
+                          {uploadResult.warnings.length} data warning(s)
+                        </summary>
+                        <ul className="mt-2 space-y-1">
+                          {uploadResult.warnings.map((w, i) => (
+                            <li key={i} className="text-yellow-400/60 text-xs font-body">• {w}</li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
       </div>
     </section>
   );
