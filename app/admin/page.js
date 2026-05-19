@@ -1223,6 +1223,219 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
 }
 
 // ─────────────────────────────────────────────────────────────
+// AddClientModal — manual client creation overlay
+// ─────────────────────────────────────────────────────────────
+
+function AddClientModal({ adminKey, onClose, onCreated }) {
+  const emptyForm = {
+    fullName: '',
+    phone: '',
+    email: '',
+    selectedPlan: 'group',
+    sport: '',
+    trainingStartDate: '',
+    discountPercent: '',
+    customMonthlyRate: '',
+    partnershipNote: '',
+    notes: '',
+  };
+  const [form, setForm] = useState(emptyForm);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null); // { ok, message }
+
+  function set(field, value) {
+    setForm(f => ({ ...f, [field]: value }));
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setLoading(true);
+    setResult(null);
+    try {
+      const body = {
+        fullName: form.fullName,
+        phone: form.phone || undefined,
+        email: form.email || undefined,
+        selectedPlan: form.selectedPlan,
+        sport: form.sport || undefined,
+        trainingStartDate: form.trainingStartDate || undefined,
+        discountPercent: form.discountPercent !== '' ? Number(form.discountPercent) : undefined,
+        customMonthlyRate: form.customMonthlyRate !== '' ? Number(form.customMonthlyRate) : undefined,
+        partnershipNote: form.partnershipNote || undefined,
+        notes: form.notes || undefined,
+      };
+      const res = await fetch('/api/admin/create-client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminKey}` },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setResult({ ok: true, message: `${json.client.full_name} added successfully.` });
+        setForm(emptyForm);
+        onCreated(); // refresh client list
+        setTimeout(() => onClose(), 1200);
+      } else {
+        setResult({ ok: false, message: json.error || 'Failed to create client.' });
+      }
+    } catch (err) {
+      setResult({ ok: false, message: 'Something went wrong.' });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const inputStyle = {
+    width: '100%', background: '#111', border: '1px solid #333', borderRadius: '6px',
+    padding: '8px 10px', color: '#f5f5f8', fontSize: '14px', boxSizing: 'border-box',
+  };
+  const labelStyle = {
+    display: 'block', fontSize: '11px', color: '#555', marginBottom: '4px',
+    textTransform: 'uppercase', letterSpacing: '0.05em',
+  };
+  const fieldStyle = { display: 'flex', flexDirection: 'column' };
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000,
+      display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+      padding: '40px 20px', overflowY: 'auto',
+    }}>
+      <div style={{
+        background: '#0d0d0d', border: '1px solid #222', borderRadius: '12px',
+        width: '100%', maxWidth: '640px', padding: '28px',
+      }}>
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+          <p style={{
+            fontFamily: 'Oswald, sans-serif', fontWeight: 700, fontSize: '20px',
+            letterSpacing: '0.08em', color: '#f5f5f8', textTransform: 'uppercase', margin: 0,
+          }}>Add Client</p>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#555', fontSize: '20px', cursor: 'pointer', lineHeight: 1 }}>✕</button>
+        </div>
+
+        {/* Result banner */}
+        {result && (
+          <div style={{
+            padding: '10px 14px', borderRadius: '6px', marginBottom: '16px',
+            background: result.ok ? '#14532d' : '#450a0a',
+            color: result.ok ? '#86efac' : '#fca5a5', fontSize: '13px',
+          }}>
+            {result.message}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+
+            {/* Full Name */}
+            <div style={{ ...fieldStyle, gridColumn: '1 / -1' }}>
+              <label style={labelStyle}>Full Name *</label>
+              <input required type="text" value={form.fullName} onChange={e => set('fullName', e.target.value)} placeholder="e.g. John Kamau" style={inputStyle} />
+            </div>
+
+            {/* Phone */}
+            <div style={fieldStyle}>
+              <label style={labelStyle}>Phone</label>
+              <input type="tel" value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="07xx xxx xxx" style={inputStyle} />
+            </div>
+
+            {/* Email */}
+            <div style={fieldStyle}>
+              <label style={labelStyle}>Email</label>
+              <input type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="client@email.com" style={inputStyle} />
+            </div>
+
+            {/* Training Plan */}
+            <div style={fieldStyle}>
+              <label style={labelStyle}>Training Plan *</label>
+              <select required value={form.selectedPlan} onChange={e => set('selectedPlan', e.target.value)} style={inputStyle}>
+                {trainingPlans.map(p => (
+                  <option key={p.id} value={p.id}>{p.name} — {p.displayPrice}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Sport */}
+            <div style={fieldStyle}>
+              <label style={labelStyle}>Sport</label>
+              <input type="text" value={form.sport} onChange={e => set('sport', e.target.value)} placeholder="e.g. Football" style={inputStyle} />
+            </div>
+
+            {/* Training Start Date */}
+            <div style={fieldStyle}>
+              <label style={labelStyle}>Training Start Date</label>
+              <input type="date" value={form.trainingStartDate} onChange={e => set('trainingStartDate', e.target.value)} style={inputStyle} />
+            </div>
+
+            {/* Discount % */}
+            <div style={fieldStyle}>
+              <label style={labelStyle}>
+                Discount %
+                <span style={{ color: '#333', marginLeft: '4px', textTransform: 'none' }}>(0 = none)</span>
+              </label>
+              <input type="number" min="0" max="99.99" step="0.01" value={form.discountPercent} onChange={e => set('discountPercent', e.target.value)} placeholder="e.g. 30" style={inputStyle} />
+            </div>
+
+            {/* Custom Rate */}
+            <div style={fieldStyle}>
+              <label style={labelStyle}>
+                Custom Rate (KES)
+                <span style={{ color: '#333', marginLeft: '4px', textTransform: 'none' }}>(overrides %)</span>
+              </label>
+              <input type="number" min="1" value={form.customMonthlyRate} onChange={e => set('customMonthlyRate', e.target.value)} placeholder="e.g. 8000" style={inputStyle} />
+            </div>
+
+            {/* Effective rate preview */}
+            {(form.customMonthlyRate || form.discountPercent) && (() => {
+              const plan = trainingPlans.find(p => p.id === form.selectedPlan);
+              if (!plan) return null;
+              let rate = plan.price;
+              if (form.customMonthlyRate) rate = Number(form.customMonthlyRate);
+              else if (form.discountPercent) rate = Math.round(plan.price * (1 - Number(form.discountPercent) / 100));
+              return (
+                <div style={{ gridColumn: '1 / -1', background: '#111', border: '1px solid #222', borderRadius: '6px', padding: '10px 14px' }}>
+                  <p style={{ margin: 0, fontSize: '13px', color: '#fbbf24' }}>
+                    Effective rate: <strong>{formatKES(rate)} / month</strong>
+                    {form.customMonthlyRate
+                      ? <span style={{ color: '#555' }}> (custom override)</span>
+                      : <span style={{ color: '#555' }}> ({form.discountPercent}% off {formatKES(plan.price)})</span>
+                    }
+                  </p>
+                </div>
+              );
+            })()}
+
+            {/* Partnership Note */}
+            <div style={{ ...fieldStyle, gridColumn: '1 / -1' }}>
+              <label style={labelStyle}>Partnership Note</label>
+              <input type="text" value={form.partnershipNote} onChange={e => set('partnershipNote', e.target.value)} placeholder="e.g. NPH athlete — complimentary pilot" style={inputStyle} />
+            </div>
+
+            {/* Admin Notes */}
+            <div style={{ ...fieldStyle, gridColumn: '1 / -1' }}>
+              <label style={labelStyle}>Admin Notes</label>
+              <input type="text" value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Optional internal notes" style={inputStyle} />
+            </div>
+
+          </div>
+
+          {/* Footer */}
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '24px', paddingTop: '20px', borderTop: '1px solid #1a1a1a' }}>
+            <button type="button" onClick={onClose} style={{ background: 'transparent', border: '1px solid #333', color: '#d3d3d3', borderRadius: '6px', padding: '9px 20px', fontSize: '13px', cursor: 'pointer' }}>
+              Cancel
+            </button>
+            <button type="submit" disabled={loading} style={{ background: '#a60a08', color: '#f5f5f8', border: 'none', borderRadius: '6px', padding: '9px 24px', fontSize: '13px', fontWeight: 700, letterSpacing: '0.05em', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1 }}>
+              {loading ? 'Creating…' : 'Create Client'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // RevenueView — all-payments ledger with KPI summary
 // ─────────────────────────────────────────────────────────────
 
@@ -1361,6 +1574,7 @@ export default function AdminPage() {
   const [activeSection, setActiveSection] = useState('applications');
   const [activeTab, setActiveTab] = useState('applications');
   const [selectedClient, setSelectedClient] = useState(null);
+  const [showAddClient, setShowAddClient] = useState(false);
 
   // Upload state
   const [uploadFile, setUploadFile] = useState(null);
@@ -1483,6 +1697,15 @@ export default function AdminPage() {
         {/* ── List view ── */}
         {!selectedClient && (
           <>
+            {/* Modal */}
+            {showAddClient && (
+              <AddClientModal
+                adminKey={adminKey}
+                onClose={() => setShowAddClient(false)}
+                onCreated={() => fetchClients()}
+              />
+            )}
+
             {/* Header */}
             <div className="flex items-center justify-between mb-8">
               <div>
@@ -1498,30 +1721,38 @@ export default function AdminPage() {
             </div>
 
             {/* Top-level tab switcher: Applications | Revenue */}
-            <div style={{ display: 'flex', gap: '4px', marginBottom: '20px', borderBottom: '1px solid #222', paddingBottom: '0' }}>
-              {[['applications', 'Applications'], ['revenue', 'Revenue']].map(([key, label]) => (
-                <button
-                  key={key}
-                  onClick={() => setActiveTab(key)}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: activeTab === key ? '#f5f5f8' : '#555',
-                    fontFamily: 'Oswald, sans-serif',
-                    fontWeight: 700,
-                    fontSize: '14px',
-                    letterSpacing: '0.08em',
-                    textTransform: 'uppercase',
-                    padding: '8px 16px 10px',
-                    cursor: 'pointer',
-                    borderBottom: activeTab === key ? '2px solid #a60a08' : '2px solid transparent',
-                    marginBottom: '-1px',
-                    transition: 'color 0.15s',
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '20px', borderBottom: '1px solid #222', paddingBottom: '0' }}>
+              <div style={{ display: 'flex', gap: '4px' }}>
+                {[['applications', 'Applications'], ['revenue', 'Revenue']].map(([key, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => setActiveTab(key)}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: activeTab === key ? '#f5f5f8' : '#555',
+                      fontFamily: 'Oswald, sans-serif',
+                      fontWeight: 700,
+                      fontSize: '14px',
+                      letterSpacing: '0.08em',
+                      textTransform: 'uppercase',
+                      padding: '8px 16px 10px',
+                      cursor: 'pointer',
+                      borderBottom: activeTab === key ? '2px solid #a60a08' : '2px solid transparent',
+                      marginBottom: '-1px',
+                      transition: 'color 0.15s',
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => setShowAddClient(true)}
+                style={{ background: '#a60a08', color: '#f5f5f8', border: 'none', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: 700, letterSpacing: '0.06em', cursor: 'pointer', marginBottom: '4px' }}
+              >
+                + Add Client
+              </button>
             </div>
 
             {/* Revenue tab */}
