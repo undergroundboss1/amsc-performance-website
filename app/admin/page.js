@@ -65,6 +65,13 @@ function getPaymentTiming(client) {
   return { lastPaid, nextDue, daysUntilDue, daysOverdue, isAutoRenew, cycleAnchor, usingStartDate };
 }
 
+function effectiveRate(client) {
+  if (client.custom_monthly_rate) return Number(client.custom_monthly_rate);
+  if (Number(client.discount_percent) > 0)
+    return Math.round(client.plan_price * (1 - Number(client.discount_percent) / 100));
+  return client.plan_price;
+}
+
 function providerLabel(provider) {
   if (provider === 'paystack') return 'Card (auto-renews)';
   if (provider === 'paystack_mpesa') return 'M-Pesa (manual)';
@@ -412,6 +419,15 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
   const [actionLoading, setActionLoading] = useState(false);
   const [paymentLink, setPaymentLink] = useState(null);
 
+  const [showPricingEditor, setShowPricingEditor] = useState(false);
+  const [pricingForm, setPricingForm] = useState({
+    discountPercent: String(client.discount_percent || '0'),
+    customMonthlyRate: client.custom_monthly_rate ? String(client.custom_monthly_rate) : '',
+    partnershipNote: client.partnership_note || '',
+  });
+  const [pricingLoading, setPricingLoading] = useState(false);
+  const [pricingResult, setPricingResult] = useState(null); // { ok, message }
+
   // Plan change state
   const [selectedPlan, setSelectedPlan] = useState(client.selected_plan);
   const [planChanging, setPlanChanging] = useState(false);
@@ -426,12 +442,88 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
   const [startDateSaving, setStartDateSaving] = useState(false);
   const [startDateResult, setStartDateResult] = useState(null); // { success, message }
 
+  async function handleSavePricing(e) {
+    e.preventDefault();
+    setPricingLoading(true);
+    setPricingResult(null);
+    try {
+      const body = { clientId: client.id };
+      const pct = parseFloat(pricingForm.discountPercent);
+      body.discountPercent = isNaN(pct) ? 0 : pct;
+      body.customMonthlyRate = pricingForm.customMonthlyRate
+        ? Number(pricingForm.customMonthlyRate)
+        : null;
+      body.partnershipNote = pricingForm.partnershipNote || null;
+
+      const res = await fetch('/api/admin/update-client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminKey}` },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        // Update local client state so display refreshes immediately
+        setClient(prev => ({
+          ...prev,
+          discount_percent: body.discountPercent,
+          custom_monthly_rate: body.customMonthlyRate,
+          partnership_note: body.partnershipNote,
+        }));
+        setPricingResult({ ok: true, message: 'Pricing updated.' });
+        setShowPricingEditor(false);
+        if (onUpdate) onUpdate();
+      } else {
+        setPricingResult({ ok: false, message: json.error || 'Failed to update pricing.' });
+      }
+    } catch (err) {
+      setPricingResult({ ok: false, message: 'Something went wrong.' });
+    } finally {
+      setPricingLoading(false);
+    }
+  }
+
+  async function handleClearPricing() {
+    setPricingLoading(true);
+    setPricingResult(null);
+    try {
+      const res = await fetch('/api/admin/update-client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminKey}` },
+        body: JSON.stringify({
+          clientId: client.id,
+          discountPercent: null,
+          customMonthlyRate: null,
+          partnershipNote: null,
+        }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setClient(prev => ({
+          ...prev,
+          discount_percent: 0,
+          custom_monthly_rate: null,
+          partnership_note: null,
+        }));
+        setPricingForm({ discountPercent: '0', customMonthlyRate: '', partnershipNote: '' });
+        setPricingResult({ ok: true, message: 'Pricing reset to standard rate.' });
+        setShowPricingEditor(false);
+        if (onUpdate) onUpdate();
+      } else {
+        setPricingResult({ ok: false, message: json.error || 'Failed to clear pricing.' });
+      }
+    } catch (err) {
+      setPricingResult({ ok: false, message: 'Something went wrong.' });
+    } finally {
+      setPricingLoading(false);
+    }
+  }
+
   // Payment history state
   const [payments, setPayments] = useState([]);
   const [paymentsLoading, setPaymentsLoading] = useState(false);
   const [showAddPayment, setShowAddPayment] = useState(false);
   const [addPaymentForm, setAddPaymentForm] = useState({
-    amount: '',
+    amount: String(effectiveRate(client)),
     paymentDate: new Date().toISOString().split('T')[0],
     paymentMethod: 'manual_cash',
     monthsCovered: '1',
@@ -570,7 +662,7 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
       const json = await res.json();
       if (res.ok) {
         setAddPaymentResult({ ok: true, message: json.message });
-        setAddPaymentForm({ amount: '', paymentDate: new Date().toISOString().split('T')[0], paymentMethod: 'manual_cash', monthsCovered: '1', notes: '' });
+        setAddPaymentForm({ amount: String(effectiveRate(client)), paymentDate: new Date().toISOString().split('T')[0], paymentMethod: 'manual_cash', monthsCovered: '1', notes: '' });
         setShowAddPayment(false);
         fetchPayments(); // refresh list
         // Also refresh the parent client list
@@ -676,6 +768,115 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
 
         {/* Payment timing — detailed mode shows provider */}
         <PaymentTimingBar client={client} detailed />
+
+        {/* ── Pricing Override ───────────────────────────────── */}
+        <div style={{ borderTop: '1px solid #1a1a1a', paddingTop: '16px', marginTop: '4px' }}>
+          {/* Effective rate display */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+            <div>
+              <p style={{ fontFamily: 'Oswald, sans-serif', fontWeight: 700, fontSize: '11px', letterSpacing: '0.1em', color: '#555', textTransform: 'uppercase', margin: '0 0 4px 0' }}>
+                Effective Monthly Rate
+              </p>
+              <p style={{ fontSize: '20px', fontWeight: 700, color: '#f5f5f8', margin: 0 }}>
+                {formatKES(effectiveRate(client))}
+                <span style={{ fontSize: '12px', color: '#555', fontWeight: 400, marginLeft: '6px' }}>/ month</span>
+              </p>
+              {/* Explain the rate */}
+              {client.custom_monthly_rate ? (
+                <p style={{ fontSize: '12px', color: '#fbbf24', margin: '4px 0 0 0' }}>
+                  Custom rate · standard {formatKES(client.plan_price)}
+                  {client.partnership_note && <span style={{ color: '#d3d3d3' }}> · {client.partnership_note}</span>}
+                </p>
+              ) : Number(client.discount_percent) > 0 ? (
+                <p style={{ fontSize: '12px', color: '#fbbf24', margin: '4px 0 0 0' }}>
+                  {client.discount_percent}% discount off {formatKES(client.plan_price)}
+                  {client.partnership_note && <span style={{ color: '#d3d3d3' }}> · {client.partnership_note}</span>}
+                </p>
+              ) : (
+                <p style={{ fontSize: '12px', color: '#555', margin: '4px 0 0 0' }}>Standard rate — no discount</p>
+              )}
+            </div>
+            <button
+              onClick={() => setShowPricingEditor(v => !v)}
+              style={{ background: 'transparent', border: '1px solid #333', color: '#d3d3d3', borderRadius: '6px', padding: '5px 12px', fontSize: '12px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+            >
+              {showPricingEditor ? 'Cancel' : 'Edit Pricing'}
+            </button>
+          </div>
+
+          {/* Result message */}
+          {pricingResult && (
+            <div style={{ padding: '8px 12px', borderRadius: '6px', marginBottom: '10px', background: pricingResult.ok ? '#14532d' : '#450a0a', color: pricingResult.ok ? '#86efac' : '#fca5a5', fontSize: '13px' }}>
+              {pricingResult.message}
+            </div>
+          )}
+
+          {/* Edit form */}
+          {showPricingEditor && (
+            <form onSubmit={handleSavePricing} style={{ background: '#111', border: '1px solid #333', borderRadius: '8px', padding: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', color: '#555', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Discount %
+                  <span style={{ color: '#333', marginLeft: '4px', textTransform: 'none' }}>(0 = no discount)</span>
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <input
+                    type="number" min="0" max="99.99" step="0.01"
+                    value={pricingForm.discountPercent}
+                    onChange={e => setPricingForm(f => ({ ...f, discountPercent: e.target.value }))}
+                    style={{ flex: 1, background: '#1a1a1a', border: '1px solid #333', borderRadius: '6px', padding: '8px 10px', color: '#f5f5f8', fontSize: '14px' }}
+                  />
+                  <span style={{ color: '#555', fontSize: '14px' }}>%</span>
+                </div>
+                {Number(pricingForm.discountPercent) > 0 && !pricingForm.customMonthlyRate && (
+                  <p style={{ fontSize: '11px', color: '#fbbf24', margin: '4px 0 0 0' }}>
+                    → {formatKES(Math.round(client.plan_price * (1 - Number(pricingForm.discountPercent) / 100)))} / month
+                  </p>
+                )}
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', color: '#555', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Custom Rate (KES)
+                  <span style={{ color: '#333', marginLeft: '4px', textTransform: 'none' }}>(overrides discount)</span>
+                </label>
+                <input
+                  type="number" min="1"
+                  value={pricingForm.customMonthlyRate}
+                  onChange={e => setPricingForm(f => ({ ...f, customMonthlyRate: e.target.value }))}
+                  placeholder="e.g. 8000"
+                  style={{ width: '100%', background: '#1a1a1a', border: '1px solid #333', borderRadius: '6px', padding: '8px 10px', color: '#f5f5f8', fontSize: '14px', boxSizing: 'border-box' }}
+                />
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ display: 'block', fontSize: '11px', color: '#555', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Partnership Note</label>
+                <input
+                  type="text"
+                  value={pricingForm.partnershipNote}
+                  onChange={e => setPricingForm(f => ({ ...f, partnershipNote: e.target.value }))}
+                  placeholder="e.g. NPH athlete — complimentary pilot"
+                  style={{ width: '100%', background: '#1a1a1a', border: '1px solid #333', borderRadius: '6px', padding: '8px 10px', color: '#f5f5f8', fontSize: '14px', boxSizing: 'border-box' }}
+                />
+              </div>
+              <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  onClick={handleClearPricing}
+                  disabled={pricingLoading}
+                  style={{ background: 'transparent', border: '1px solid #333', color: '#d3d3d3', borderRadius: '6px', padding: '8px 14px', fontSize: '13px', cursor: pricingLoading ? 'not-allowed' : 'pointer', opacity: pricingLoading ? 0.6 : 1 }}
+                >
+                  Clear All
+                </button>
+                <button
+                  type="submit"
+                  disabled={pricingLoading}
+                  style={{ background: '#a60a08', color: '#f5f5f8', border: 'none', borderRadius: '6px', padding: '8px 20px', fontSize: '13px', fontWeight: 600, cursor: pricingLoading ? 'not-allowed' : 'pointer', opacity: pricingLoading ? 0.6 : 1 }}
+                >
+                  {pricingLoading ? 'Saving…' : 'Save Pricing'}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
 
         {/* Explicit overdue callout */}
         {client.payment_status === 'overdue' && timing && (
