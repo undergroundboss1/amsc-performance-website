@@ -1436,6 +1436,278 @@ function AddClientModal({ adminKey, onClose, onCreated }) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// ImportPaymentsModal — CSV upload / paste → preview → import
+// ─────────────────────────────────────────────────────────────
+
+function ImportPaymentsModal({ adminKey, onClose, onImported }) {
+  const [stage, setStage] = useState('upload'); // 'upload' | 'preview' | 'result'
+  const [csvText, setCsvText] = useState('');
+  const [parsedRows, setParsedRows] = useState([]);
+  const [parseError, setParseError] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
+
+  function parseCSV(text) {
+    const lines = text.trim().split('\n').filter(l => l.trim());
+    if (lines.length < 2) return { rows: [], error: 'CSV must have a header row and at least one data row.' };
+
+    // Detect delimiter: comma or semicolon
+    const delim = lines[0].includes(';') ? ';' : ',';
+    const headers = lines[0].split(delim).map(h => h.trim().toLowerCase().replace(/[^a-z_]/g, '_'));
+
+    // Find column indices (flexible — any order)
+    const col = (names) => { for (const n of names) { const i = headers.indexOf(n); if (i >= 0) return i; } return -1; };
+    const iName = col(['client_name', 'name', 'member_name', 'member']);
+    const iDate = col(['payment_date', 'date', 'paid_at', 'paid_on']);
+    const iAmount = col(['amount', 'amt', 'payment_amount', 'fee']);
+    const iPlan = col(['plan', 'tier', 'plan_id']);
+    const iNotes = col(['notes', 'note', 'description', 'remarks']);
+
+    if (iName < 0) return { rows: [], error: 'Could not find a "client_name" column.' };
+    if (iDate < 0) return { rows: [], error: 'Could not find a "payment_date" column.' };
+    if (iAmount < 0) return { rows: [], error: 'Could not find an "amount" column.' };
+
+    const rows = [];
+    for (let i = 1; i < lines.length; i++) {
+      const cells = lines[i].split(delim).map(c => c.trim().replace(/^"|"$/g, ''));
+      const clientName = iName >= 0 ? cells[iName] : '';
+      const paymentDate = iDate >= 0 ? cells[iDate] : '';
+      const amountRaw = iAmount >= 0 ? cells[iAmount] : '';
+      const plan = iPlan >= 0 ? cells[iPlan] : '';
+      const notes = iNotes >= 0 ? cells[iNotes] : '';
+
+      // Validate
+      let error = null;
+      if (!clientName) error = 'Missing client name';
+      else if (!paymentDate) error = 'Missing payment date';
+      else if (!amountRaw || isNaN(Number(amountRaw.replace(/,/g,''))) || Number(amountRaw.replace(/,/g,'')) <= 0)
+        error = `Invalid amount: ${amountRaw}`;
+
+      rows.push({
+        rowNum: i,
+        clientName,
+        paymentDate,
+        amount: amountRaw.replace(/,/g,''),
+        plan,
+        notes,
+        error,
+      });
+    }
+    return { rows, error: null };
+  }
+
+  function handleParse() {
+    setParseError('');
+    const { rows, error } = parseCSV(csvText);
+    if (error) { setParseError(error); return; }
+    setParsedRows(rows);
+    setStage('preview');
+  }
+
+  function handleFileUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => setCsvText(ev.target.result);
+    reader.readAsText(file);
+  }
+
+  async function handleImport() {
+    setImporting(true);
+    const validRows = parsedRows.filter(r => !r.error).map(r => ({
+      clientName: r.clientName,
+      paymentDate: r.paymentDate,
+      amount: Number(r.amount),
+      plan: r.plan || undefined,
+      notes: r.notes || undefined,
+    }));
+    try {
+      const res = await fetch('/api/admin/import-payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminKey}` },
+        body: JSON.stringify({ rows: validRows }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setImportResult(json);
+        setStage('result');
+      } else {
+        setImportResult({ error: json.error || 'Import failed.' });
+        setStage('result');
+      }
+    } catch (err) {
+      setImportResult({ error: 'Something went wrong.' });
+      setStage('result');
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  const validCount = parsedRows.filter(r => !r.error).length;
+  const errorCount = parsedRows.filter(r => !!r.error).length;
+
+  const overlayStyle = {
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.88)', zIndex: 1000,
+    display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+    padding: '40px 20px', overflowY: 'auto',
+  };
+  const modalStyle = {
+    background: '#0d0d0d', border: '1px solid #222', borderRadius: '12px',
+    width: '100%', maxWidth: '760px', padding: '28px',
+  };
+  const inputStyle = {
+    width: '100%', background: '#111', border: '1px solid #333', borderRadius: '6px',
+    padding: '8px 12px', color: '#f5f5f8', fontSize: '13px', boxSizing: 'border-box',
+  };
+
+  return (
+    <div style={overlayStyle}>
+      <div style={modalStyle}>
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <div>
+            <p style={{ fontFamily: 'Oswald, sans-serif', fontWeight: 700, fontSize: '18px', letterSpacing: '0.08em', color: '#f5f5f8', textTransform: 'uppercase', margin: 0 }}>
+              Import Payment Records
+            </p>
+            <p style={{ color: '#555', fontSize: '12px', margin: '4px 0 0 0' }}>
+              Stage: {stage === 'upload' ? '1 — Upload CSV' : stage === 'preview' ? '2 — Review & Confirm' : '3 — Complete'}
+            </p>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#555', fontSize: '20px', cursor: 'pointer' }}>✕</button>
+        </div>
+
+        {/* Stage 1 — Upload */}
+        {stage === 'upload' && (
+          <div>
+            <div style={{ background: '#111', border: '1px solid #222', borderRadius: '8px', padding: '14px', marginBottom: '16px' }}>
+              <p style={{ fontFamily: 'Oswald, sans-serif', fontWeight: 700, fontSize: '11px', letterSpacing: '0.1em', color: '#555', textTransform: 'uppercase', margin: '0 0 6px 0' }}>Expected CSV columns</p>
+              <p style={{ color: '#d3d3d3', fontSize: '13px', fontFamily: 'monospace', margin: '0 0 4px 0' }}>client_name, payment_date, amount, plan (optional), notes (optional)</p>
+              <p style={{ color: '#555', fontSize: '12px', margin: 0 }}>
+                Dates: YYYY-MM-DD or DD/MM/YYYY · Plan values: Tier 1, Tier 2, Tier 3, Online (or leave blank → defaults to Group)
+              </p>
+            </div>
+
+            {parseError && (
+              <div style={{ background: '#450a0a', color: '#fca5a5', borderRadius: '6px', padding: '10px 14px', marginBottom: '12px', fontSize: '13px' }}>
+                {parseError}
+              </div>
+            )}
+
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'block', fontSize: '11px', color: '#555', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Upload .csv file</label>
+              <input type="file" accept=".csv,.txt" onChange={handleFileUpload}
+                style={{ color: '#d3d3d3', fontSize: '13px' }} />
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '11px', color: '#555', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Or paste CSV text</label>
+              <textarea
+                value={csvText}
+                onChange={e => setCsvText(e.target.value)}
+                rows={8}
+                placeholder={'client_name,payment_date,amount,plan,notes\nDerrick Ogechi,2026-04-28,39000,Tier 1,April payment\nRyan Karimi,2026-04-10,60000,Tier 2,'}
+                style={{ ...inputStyle, resize: 'vertical', fontFamily: 'monospace', fontSize: '12px' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button onClick={onClose} style={{ background: 'transparent', border: '1px solid #333', color: '#d3d3d3', borderRadius: '6px', padding: '8px 18px', fontSize: '13px', cursor: 'pointer' }}>Cancel</button>
+              <button onClick={handleParse} disabled={!csvText.trim()} style={{ background: '#a60a08', color: '#f5f5f8', border: 'none', borderRadius: '6px', padding: '8px 22px', fontSize: '13px', fontWeight: 700, cursor: !csvText.trim() ? 'not-allowed' : 'pointer', opacity: !csvText.trim() ? 0.5 : 1 }}>
+                Parse →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Stage 2 — Preview */}
+        {stage === 'preview' && (
+          <div>
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+              <span style={{ background: '#14532d', color: '#86efac', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 600 }}>✓ {validCount} valid rows</span>
+              {errorCount > 0 && <span style={{ background: '#450a0a', color: '#fca5a5', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 600 }}>✗ {errorCount} rows will be skipped</span>}
+            </div>
+
+            <div style={{ overflowX: 'auto', maxHeight: '360px', overflowY: 'auto', marginBottom: '16px' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                <thead style={{ position: 'sticky', top: 0, background: '#0d0d0d' }}>
+                  <tr style={{ borderBottom: '1px solid #222' }}>
+                    {['#', 'Client Name', 'Date', 'Amount', 'Plan', 'Notes', 'Status'].map(h => (
+                      <th key={h} style={{ padding: '6px 8px', color: '#555', fontFamily: 'Oswald, sans-serif', fontWeight: 700, fontSize: '10px', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'left', whiteSpace: 'nowrap' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {parsedRows.map((row, i) => (
+                    <tr key={i} style={{ borderBottom: '1px solid #111', opacity: row.error ? 0.5 : 1 }}>
+                      <td style={{ padding: '6px 8px', color: '#555' }}>{row.rowNum}</td>
+                      <td style={{ padding: '6px 8px', color: '#f5f5f8' }}>{row.clientName || '—'}</td>
+                      <td style={{ padding: '6px 8px', color: '#d3d3d3', whiteSpace: 'nowrap' }}>{row.paymentDate || '—'}</td>
+                      <td style={{ padding: '6px 8px', color: '#f5f5f8', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.amount ? formatKES(row.amount) : '—'}</td>
+                      <td style={{ padding: '6px 8px', color: '#d3d3d3' }}>{row.plan || '—'}</td>
+                      <td style={{ padding: '6px 8px', color: '#555', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.notes || '—'}</td>
+                      <td style={{ padding: '6px 8px' }}>
+                        {row.error
+                          ? <span style={{ color: '#fca5a5', fontSize: '11px' }}>✗ {row.error}</span>
+                          : <span style={{ color: '#86efac', fontSize: '11px' }}>✓</span>
+                        }
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button onClick={() => setStage('upload')} style={{ background: 'transparent', border: '1px solid #333', color: '#d3d3d3', borderRadius: '6px', padding: '8px 18px', fontSize: '13px', cursor: 'pointer' }}>← Back</button>
+              <button onClick={handleImport} disabled={importing || validCount === 0} style={{ background: '#a60a08', color: '#f5f5f8', border: 'none', borderRadius: '6px', padding: '8px 22px', fontSize: '13px', fontWeight: 700, cursor: (importing || validCount === 0) ? 'not-allowed' : 'pointer', opacity: (importing || validCount === 0) ? 0.6 : 1 }}>
+                {importing ? 'Importing…' : `Import ${validCount} Payment${validCount !== 1 ? 's' : ''}`}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Stage 3 — Result */}
+        {stage === 'result' && importResult && (
+          <div>
+            {importResult.error ? (
+              <div style={{ background: '#450a0a', color: '#fca5a5', borderRadius: '8px', padding: '16px', marginBottom: '16px' }}>{importResult.error}</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
+                <div style={{ background: '#14532d', color: '#86efac', borderRadius: '8px', padding: '14px', fontSize: '14px', fontWeight: 600 }}>
+                  ✓ {importResult.imported} payment{importResult.imported !== 1 ? 's' : ''} imported
+                </div>
+                {importResult.clientsCreated > 0 && (
+                  <div style={{ background: '#1e3a5f', color: '#93c5fd', borderRadius: '8px', padding: '14px', fontSize: '14px', fontWeight: 600 }}>
+                    ★ {importResult.clientsCreated} new client record{importResult.clientsCreated !== 1 ? 's' : ''} created
+                  </div>
+                )}
+                {importResult.errors?.length > 0 && (
+                  <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: '8px', padding: '14px' }}>
+                    <p style={{ color: '#fbbf24', fontSize: '13px', fontWeight: 600, margin: '0 0 8px 0' }}>⚠ {importResult.errors.length} row{importResult.errors.length !== 1 ? 's' : ''} skipped</p>
+                    {importResult.errors.slice(0, 5).map((e, i) => (
+                      <p key={i} style={{ color: '#555', fontSize: '12px', margin: '2px 0' }}>Row {e.row}: {e.reason}</p>
+                    ))}
+                    {importResult.errors.length > 5 && <p style={{ color: '#555', fontSize: '12px', margin: '4px 0 0 0' }}>…and {importResult.errors.length - 5} more</p>}
+                  </div>
+                )}
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => { onImported(); }}
+                style={{ background: '#a60a08', color: '#f5f5f8', border: 'none', borderRadius: '6px', padding: '9px 24px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // RevenueView — all-payments ledger with KPI summary
 // ─────────────────────────────────────────────────────────────
 
@@ -1443,79 +1715,240 @@ function RevenueView({ adminKey }) {
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
+  const [period, setPeriod] = useState('month'); // 'week' | 'month' | 'year' | 'all'
+  const [showImport, setShowImport] = useState(false);
 
-  useEffect(() => {
-    async function fetchAll() {
-      setLoading(true);
-      try {
-        const res = await fetch('/api/admin/payments', {
-          headers: { Authorization: `Bearer ${adminKey}` },
-        });
-        const json = await res.json();
-        if (res.ok) setPayments(json.payments || []);
-      } catch (e) {
-        console.error('RevenueView fetch error', e);
-      } finally {
-        setLoading(false);
-      }
+  async function fetchAll() {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/payments', {
+        headers: { Authorization: `Bearer ${adminKey}` },
+      });
+      const json = await res.json();
+      if (res.ok) setPayments(json.payments || []);
+    } catch (e) {
+      console.error('RevenueView fetch error', e);
+    } finally {
+      setLoading(false);
     }
-    fetchAll();
-  }, [adminKey]);
+  }
 
-  const filtered = filter
-    ? payments.filter(p =>
-        (p.clients?.full_name || '').toLowerCase().includes(filter.toLowerCase()) ||
-        (p.payment_method || '').toLowerCase().includes(filter.toLowerCase())
-      )
-    : payments;
+  useEffect(() => { fetchAll(); }, [adminKey]);
 
-  // Summary KPIs
+  // ── Date helpers ─────────────────────────────────────────────────────────
   const now = new Date();
-  const thisMonthPayments = payments.filter(p => {
+
+  function getWeekStart(d) {
+    const day = d.getDay(); // 0=Sun
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Mon as start
+    const s = new Date(d); s.setDate(diff); s.setHours(0,0,0,0); return s;
+  }
+  const weekStart = getWeekStart(now);
+  const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 7);
+
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+  const yearStart = new Date(now.getFullYear(), 0, 1);
+  const yearEnd = new Date(now.getFullYear() + 1, 0, 1);
+
+  function inRange(p, start, end) {
     const d = new Date(p.payment_date);
-    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+    return d >= start && d < end;
+  }
+
+  // ── Filter payments for current period ────────────────────────────────────
+  const periodPayments = payments.filter(p => {
+    if (period === 'week') return inRange(p, weekStart, weekEnd);
+    if (period === 'month') return inRange(p, monthStart, monthEnd);
+    if (period === 'year') return inRange(p, yearStart, yearEnd);
+    return true; // all
   });
 
-  const totalsAll = payments.reduce((a, p) => ({ revenue: a.revenue + +p.amount, rent: a.rent + +p.rent_split, net: a.net + +p.net_revenue }), { revenue: 0, rent: 0, net: 0 });
-  const totalsMonth = thisMonthPayments.reduce((a, p) => ({ revenue: a.revenue + +p.amount, rent: a.rent + +p.rent_split, net: a.net + +p.net_revenue }), { revenue: 0, rent: 0, net: 0 });
+  // ── Totals for selected period ─────────────────────────────────────────────
+  function sumPayments(arr) {
+    return arr.reduce((a, p) => ({
+      revenue: a.revenue + +p.amount,
+      rent: a.rent + +p.rent_split,
+      net: a.net + +p.net_revenue,
+    }), { revenue: 0, rent: 0, net: 0 });
+  }
+  const periodTotals = sumPayments(periodPayments);
+
+  // ── Breakdown table data ───────────────────────────────────────────────────
+  function buildBreakdown() {
+    if (period === 'week') {
+      // Mon–Sun
+      const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+      return days.map((label, i) => {
+        const dayStart = new Date(weekStart); dayStart.setDate(weekStart.getDate() + i);
+        const dayEnd = new Date(dayStart); dayEnd.setDate(dayStart.getDate() + 1);
+        const rows = payments.filter(p => inRange(p, dayStart, dayEnd));
+        const isToday = dayStart.toDateString() === now.toDateString();
+        return { label: `${label} ${dayStart.getDate()}/${dayStart.getMonth()+1}`, ...sumPayments(rows), count: rows.length, current: isToday };
+      });
+    }
+    if (period === 'month') {
+      // Weeks of the current month
+      const weeks = [];
+      let weekNum = 1;
+      let wStart = new Date(monthStart);
+      // Align to Monday
+      const dow = wStart.getDay();
+      if (dow !== 1) wStart.setDate(wStart.getDate() - (dow === 0 ? 6 : dow - 1));
+      while (wStart < monthEnd) {
+        const wEnd = new Date(wStart); wEnd.setDate(wStart.getDate() + 7);
+        const rows = payments.filter(p => {
+          const d = new Date(p.payment_date);
+          return d >= wStart && d < wEnd && d >= monthStart && d < monthEnd;
+        });
+        const isCurrent = now >= wStart && now < wEnd;
+        weeks.push({ label: `Week ${weekNum}`, ...sumPayments(rows), count: rows.length, current: isCurrent });
+        wStart = new Date(wEnd);
+        weekNum++;
+        if (weekNum > 6) break;
+      }
+      return weeks;
+    }
+    if (period === 'year') {
+      // Jan–Dec of current year
+      const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return monthNames.map((name, m) => {
+        const mStart = new Date(now.getFullYear(), m, 1);
+        const mEnd = new Date(now.getFullYear(), m + 1, 1);
+        const rows = payments.filter(p => inRange(p, mStart, mEnd));
+        const isCurrent = m === now.getMonth();
+        return { label: name, ...sumPayments(rows), count: rows.length, current: isCurrent };
+      });
+    }
+    if (period === 'all') {
+      // Group by year — find min/max years in data
+      if (payments.length === 0) return [];
+      const years = [...new Set(payments.map(p => new Date(p.payment_date).getFullYear()))].sort();
+      return years.map(yr => {
+        const yStart = new Date(yr, 0, 1);
+        const yEnd = new Date(yr + 1, 0, 1);
+        const rows = payments.filter(p => inRange(p, yStart, yEnd));
+        const isCurrent = yr === now.getFullYear();
+        return { label: String(yr), ...sumPayments(rows), count: rows.length, current: isCurrent };
+      });
+    }
+    return [];
+  }
+  const breakdown = buildBreakdown();
+
+  // ── Filtered ledger ────────────────────────────────────────────────────────
+  const filtered = periodPayments.filter(p =>
+    !filter ||
+    (p.clients?.full_name || '').toLowerCase().includes(filter.toLowerCase()) ||
+    (p.payment_method || '').toLowerCase().includes(filter.toLowerCase())
+  );
+
+  // ── Period label for header ────────────────────────────────────────────────
+  const periodLabel = { week: 'This Week', month: 'This Month', year: 'This Year', all: 'All Time' }[period];
+
+  const tabStyle = (active) => ({
+    background: 'transparent', border: 'none',
+    color: active ? '#f5f5f8' : '#555',
+    fontFamily: 'Oswald, sans-serif', fontWeight: 700, fontSize: '13px',
+    letterSpacing: '0.08em', textTransform: 'uppercase',
+    padding: '7px 14px 9px', cursor: 'pointer',
+    borderBottom: active ? '2px solid #a60a08' : '2px solid transparent',
+    marginBottom: '-1px', transition: 'color 0.15s',
+  });
 
   return (
     <div>
+      {/* Import modal */}
+      {showImport && (
+        <ImportPaymentsModal
+          adminKey={adminKey}
+          onClose={() => setShowImport(false)}
+          onImported={() => { setShowImport(false); fetchAll(); }}
+        />
+      )}
+
+      {/* Header row: period tabs + Import button */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: '1px solid #222', marginBottom: '20px' }}>
+        <div style={{ display: 'flex', gap: '2px' }}>
+          {[['week','Week'],['month','Month'],['year','Year'],['all','All Time']].map(([key, label]) => (
+            <button key={key} onClick={() => setPeriod(key)} style={tabStyle(period === key)}>{label}</button>
+          ))}
+        </div>
+        <button
+          onClick={() => setShowImport(true)}
+          style={{ background: 'transparent', border: '1px solid #333', color: '#d3d3d3', borderRadius: '6px', padding: '5px 14px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', marginBottom: '4px', letterSpacing: '0.05em' }}
+        >
+          ↑ Import Records
+        </button>
+      </div>
+
       {/* KPI strip */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '24px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '20px' }}>
         {[
-          { label: 'This Month — Revenue', value: formatKES(totalsMonth.revenue), sub: `${thisMonthPayments.length} payment${thisMonthPayments.length !== 1 ? 's' : ''}` },
-          { label: 'This Month — Rent', value: formatKES(totalsMonth.rent), sub: 'Facility split (40%)' },
-          { label: 'This Month — Net', value: formatKES(totalsMonth.net), sub: 'After rent split', green: true },
+          { label: `${periodLabel} — Revenue`, value: formatKES(periodTotals.revenue), sub: `${periodPayments.length} payment${periodPayments.length !== 1 ? 's' : ''}` },
+          { label: `${periodLabel} — Rent`, value: formatKES(periodTotals.rent), sub: 'Facility split (40%)' },
+          { label: `${periodLabel} — Net`, value: formatKES(periodTotals.net), sub: 'After rent split', green: true },
+          { label: 'All Time — Net', value: formatKES(sumPayments(payments).net), sub: `${payments.length} total payments`, dim: true },
         ].map(k => (
-          <div key={k.label} style={{ background: '#1a1a1a', border: '1px solid #222', borderRadius: '8px', padding: '16px' }}>
-            <p style={{ fontFamily: 'Oswald, sans-serif', fontWeight: 700, fontSize: '10px', letterSpacing: '0.12em', color: '#555', textTransform: 'uppercase', marginBottom: '6px', margin: '0 0 6px 0' }}>{k.label}</p>
-            <p style={{ fontSize: '22px', fontWeight: 700, color: k.green ? '#22c55e' : '#f5f5f8', margin: '0 0 2px 0' }}>{k.value}</p>
+          <div key={k.label} style={{ background: k.dim ? '#111' : '#1a1a1a', border: '1px solid #222', borderRadius: '8px', padding: '14px' }}>
+            <p style={{ fontFamily: 'Oswald, sans-serif', fontWeight: 700, fontSize: '10px', letterSpacing: '0.1em', color: '#555', textTransform: 'uppercase', margin: '0 0 5px 0' }}>{k.label}</p>
+            <p style={{ fontSize: k.dim ? '16px' : '20px', fontWeight: 700, color: k.green ? '#22c55e' : '#f5f5f8', margin: '0 0 2px 0' }}>{k.value}</p>
             <p style={{ fontSize: '11px', color: '#555', margin: 0 }}>{k.sub}</p>
           </div>
         ))}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '24px' }}>
-        {[
-          { label: 'All Time — Revenue', value: formatKES(totalsAll.revenue) },
-          { label: 'All Time — Rent', value: formatKES(totalsAll.rent) },
-          { label: 'All Time — Net', value: formatKES(totalsAll.net), green: true },
-        ].map(k => (
-          <div key={k.label} style={{ background: '#111', border: '1px solid #222', borderRadius: '8px', padding: '12px 16px' }}>
-            <p style={{ fontFamily: 'Oswald, sans-serif', fontWeight: 700, fontSize: '10px', letterSpacing: '0.12em', color: '#555', textTransform: 'uppercase', marginBottom: '4px', margin: '0 0 4px 0' }}>{k.label}</p>
-            <p style={{ fontSize: '18px', fontWeight: 700, color: k.green ? '#22c55e' : '#f5f5f8', margin: 0 }}>{k.value}</p>
-          </div>
-        ))}
-      </div>
 
-      {/* Search / filter */}
-      <div style={{ marginBottom: '16px' }}>
+      {/* Period breakdown table */}
+      {breakdown.length > 0 && (
+        <div style={{ marginBottom: '24px', overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid #222' }}>
+                {['Period', 'Revenue', 'Rent Split', 'Net Revenue', 'Payments'].map(h => (
+                  <th key={h} style={{ textAlign: 'left', padding: '6px 10px', color: '#555', fontFamily: 'Oswald, sans-serif', fontWeight: 700, fontSize: '11px', letterSpacing: '0.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {breakdown.map((row, i) => (
+                <tr key={i} style={{ borderBottom: '1px solid #111', background: row.current ? 'rgba(166,10,8,0.07)' : 'transparent' }}>
+                  <td style={{ padding: '7px 10px', color: row.current ? '#f5f5f8' : (row.count === 0 ? '#333' : '#d3d3d3'), fontWeight: row.current ? 700 : 400, whiteSpace: 'nowrap' }}>
+                    {row.label}
+                    {row.current && <span style={{ color: '#a60a08', fontSize: '10px', marginLeft: '6px', fontFamily: 'Oswald, sans-serif', letterSpacing: '0.08em' }}>NOW</span>}
+                  </td>
+                  <td style={{ padding: '7px 10px', color: row.count === 0 ? '#333' : '#f5f5f8', fontWeight: row.count > 0 ? 600 : 400 }}>{row.revenue > 0 ? formatKES(row.revenue) : '—'}</td>
+                  <td style={{ padding: '7px 10px', color: row.rent > 0 ? '#fbbf24' : '#333' }}>{row.rent > 0 ? formatKES(row.rent) : '—'}</td>
+                  <td style={{ padding: '7px 10px', color: row.net > 0 ? '#22c55e' : '#333', fontWeight: row.count > 0 ? 600 : 400 }}>{row.net > 0 ? formatKES(row.net) : '—'}</td>
+                  <td style={{ padding: '7px 10px', color: row.count === 0 ? '#333' : '#d3d3d3', textAlign: 'center' }}>{row.count || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+            {/* Totals row */}
+            <tfoot>
+              <tr style={{ borderTop: '2px solid #333' }}>
+                <td style={{ padding: '8px 10px', color: '#555', fontFamily: 'Oswald, sans-serif', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Total</td>
+                <td style={{ padding: '8px 10px', color: '#f5f5f8', fontWeight: 700 }}>{formatKES(periodTotals.revenue)}</td>
+                <td style={{ padding: '8px 10px', color: '#fbbf24', fontWeight: 600 }}>{periodTotals.rent > 0 ? formatKES(periodTotals.rent) : '—'}</td>
+                <td style={{ padding: '8px 10px', color: '#22c55e', fontWeight: 700 }}>{formatKES(periodTotals.net)}</td>
+                <td style={{ padding: '8px 10px', color: '#d3d3d3', textAlign: 'center' }}>{periodPayments.length}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+
+      {/* Ledger section header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+        <p style={{ fontFamily: 'Oswald, sans-serif', fontWeight: 700, fontSize: '12px', letterSpacing: '0.1em', color: '#555', textTransform: 'uppercase', margin: 0 }}>
+          {periodLabel} Transactions
+        </p>
         <input
           type="text"
           placeholder="Filter by client or method…"
           value={filter}
           onChange={e => setFilter(e.target.value)}
-          style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: '6px', padding: '8px 14px', color: '#f5f5f8', fontSize: '14px', width: '100%', boxSizing: 'border-box' }}
+          style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: '6px', padding: '6px 12px', color: '#f5f5f8', fontSize: '13px', width: '220px' }}
         />
       </div>
 
@@ -1523,7 +1956,7 @@ function RevenueView({ adminKey }) {
       {loading ? (
         <p style={{ color: '#555', fontSize: '13px' }}>Loading transactions…</p>
       ) : filtered.length === 0 ? (
-        <p style={{ color: '#555', fontSize: '13px', fontStyle: 'italic' }}>No transactions found.</p>
+        <p style={{ color: '#555', fontSize: '13px', fontStyle: 'italic' }}>No transactions for this period.</p>
       ) : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
@@ -1545,8 +1978,12 @@ function RevenueView({ adminKey }) {
                   <td style={{ padding: '8px 10px', color: p.rent_split > 0 ? '#fbbf24' : '#555', whiteSpace: 'nowrap' }}>{p.rent_split > 0 ? formatKES(p.rent_split) : '—'}</td>
                   <td style={{ padding: '8px 10px', color: '#22c55e', fontWeight: 600, whiteSpace: 'nowrap' }}>{formatKES(p.net_revenue)}</td>
                   <td style={{ padding: '8px 10px' }}>
-                    <span style={{ background: p.source === 'webhook' ? '#1e3a5f' : '#1a2e1a', color: p.source === 'webhook' ? '#93c5fd' : '#86efac', borderRadius: '4px', padding: '2px 6px', fontSize: '10px', fontWeight: 600, letterSpacing: '0.05em' }}>
-                      {p.source === 'webhook' ? 'AUTO' : 'MANUAL'}
+                    <span style={{
+                      background: p.source === 'webhook' ? '#1e3a5f' : p.source === 'import' ? '#2d1f4e' : '#1a2e1a',
+                      color: p.source === 'webhook' ? '#93c5fd' : p.source === 'import' ? '#c4b5fd' : '#86efac',
+                      borderRadius: '4px', padding: '2px 6px', fontSize: '10px', fontWeight: 600, letterSpacing: '0.05em',
+                    }}>
+                      {p.source === 'webhook' ? 'AUTO' : p.source === 'import' ? 'IMPORT' : 'MANUAL'}
                     </span>
                   </td>
                   <td style={{ padding: '8px 10px', color: '#555', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.notes || '—'}</td>
