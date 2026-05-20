@@ -1708,6 +1708,189 @@ function ImportPaymentsModal({ adminKey, onClose, onImported }) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// ArrearsView — clients with outstanding balances
+// ─────────────────────────────────────────────────────────────
+
+function ArrearsView({ adminKey }) {
+  const [clients, setClients] = useState([]);
+  const [totals, setTotals] = useState({ count: 0, totalOwed: 0 });
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('');
+
+  async function fetchArrears() {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/arrears', {
+        headers: { Authorization: `Bearer ${adminKey}` },
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setClients(json.clients || []);
+        setTotals(json.totals || { count: 0, totalOwed: 0 });
+      }
+    } catch (e) {
+      console.error('ArrearsView fetch error', e);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { fetchArrears(); }, [adminKey]);
+
+  function exportArrearsCSV() {
+    const rows = [
+      ['Client', 'Plan', 'Effective Rate (KES)', 'Months Enrolled', 'Months Paid', 'Months Owed', 'Amount Owed (KES)', 'Last Paid', 'Payment Status'],
+      ...filtered.map(c => [
+        c.full_name,
+        c.selected_plan,
+        Number(c.effective_price || c.plan_price),
+        c.months_enrolled,
+        c.months_paid,
+        c.months_owed,
+        Number(c.amount_owed),
+        c.last_paid_at ? new Date(c.last_paid_at).toLocaleDateString('en-KE') : 'Never',
+        c.payment_status,
+      ]),
+    ];
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `AMSC_arrears_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  const filtered = clients.filter(c =>
+    !filter || (c.full_name || '').toLowerCase().includes(filter.toLowerCase())
+  );
+
+  const planLabel = { 'one-on-one': '1-on-1', group: 'Group', youth: 'Youth', online: 'Online' };
+
+  return (
+    <div>
+      {/* Header row */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <button
+            onClick={fetchArrears}
+            style={{ background: 'transparent', border: '1px solid #333', color: '#555', borderRadius: '6px', padding: '5px 12px', fontSize: '12px', cursor: 'pointer' }}
+          >
+            ↻ Refresh
+          </button>
+          <button
+            onClick={exportArrearsCSV}
+            disabled={filtered.length === 0}
+            style={{ background: 'transparent', border: '1px solid #333', color: '#d3d3d3', borderRadius: '6px', padding: '5px 14px', fontSize: '12px', fontWeight: 600, cursor: filtered.length === 0 ? 'not-allowed' : 'pointer', opacity: filtered.length === 0 ? 0.4 : 1 }}
+          >
+            ↓ Export CSV
+          </button>
+        </div>
+        <input
+          type="text"
+          placeholder="Filter by name…"
+          value={filter}
+          onChange={e => setFilter(e.target.value)}
+          style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: '6px', padding: '6px 12px', color: '#f5f5f8', fontSize: '13px', width: '200px' }}
+        />
+      </div>
+
+      {/* Summary strip */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '24px' }}>
+        {[
+          { label: 'Clients in Arrears', value: String(totals.count), color: '#f5f5f8' },
+          { label: 'Total Amount Owed', value: formatKES(totals.totalOwed), color: '#a60a08' },
+          { label: 'Avg per Client', value: totals.count > 0 ? formatKES(Math.round(totals.totalOwed / totals.count)) : '—', color: '#fbbf24' },
+        ].map(k => (
+          <div key={k.label} style={{ background: '#1a1a1a', border: '1px solid #222', borderRadius: '8px', padding: '14px' }}>
+            <p style={{ fontFamily: 'Oswald, sans-serif', fontWeight: 700, fontSize: '10px', letterSpacing: '0.1em', color: '#555', textTransform: 'uppercase', margin: '0 0 5px 0' }}>{k.label}</p>
+            <p style={{ fontSize: '20px', fontWeight: 700, color: k.color, margin: 0 }}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Arrears table */}
+      {loading ? (
+        <p style={{ color: '#555', fontSize: '13px' }}>Loading arrears…</p>
+      ) : filtered.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '40px 20px', background: '#1a1a1a', border: '1px solid #222', borderRadius: '10px' }}>
+          <p style={{ color: '#22c55e', fontSize: '14px', fontWeight: 600, margin: '0 0 4px 0' }}>✓ No outstanding balances</p>
+          <p style={{ color: '#555', fontSize: '13px', margin: 0 }}>All active clients are up to date.</p>
+        </div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid #222' }}>
+                {['Client', 'Plan', 'Rate / mo', 'Enrolled', 'Paid', 'Owed', 'Amount Owed', 'Last Paid', 'Status'].map(h => (
+                  <th key={h} style={{ textAlign: 'left', padding: '8px 10px', color: '#555', fontFamily: 'Oswald, sans-serif', fontWeight: 700, fontSize: '11px', letterSpacing: '0.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((c, i) => {
+                const rate = Number(c.effective_price || c.plan_price);
+                const isDiscounted = rate < Number(c.plan_price);
+                const amtOwed = Number(c.amount_owed);
+                const lastPaid = c.last_paid_at ? formatDate(new Date(c.last_paid_at)) : 'Never';
+                const neverPaid = !c.last_paid_at;
+
+                return (
+                  <tr key={c.id || i} style={{ borderBottom: '1px solid #111', background: amtOwed > 30000 ? 'rgba(166,10,8,0.05)' : 'transparent' }}>
+                    <td style={{ padding: '9px 10px', color: '#f5f5f8', fontWeight: 600, whiteSpace: 'nowrap' }}>{c.full_name}</td>
+                    <td style={{ padding: '9px 10px', color: '#d3d3d3' }}>{planLabel[c.selected_plan] || c.selected_plan}</td>
+                    <td style={{ padding: '9px 10px', whiteSpace: 'nowrap' }}>
+                      <span style={{ color: '#f5f5f8' }}>{formatKES(rate)}</span>
+                      {isDiscounted && (
+                        <span style={{ color: '#555', fontSize: '11px', marginLeft: '4px' }}>
+                          {c.custom_monthly_rate ? '(custom)' : `(${Number(c.discount_percent)}% off)`}
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ padding: '9px 10px', color: '#d3d3d3', textAlign: 'center' }}>{c.months_enrolled ?? '—'}</td>
+                    <td style={{ padding: '9px 10px', color: '#d3d3d3', textAlign: 'center' }}>{c.months_paid ?? 0}</td>
+                    <td style={{ padding: '9px 10px', textAlign: 'center' }}>
+                      <span style={{ background: '#450a0a', color: '#fca5a5', borderRadius: '4px', padding: '2px 7px', fontSize: '12px', fontWeight: 700 }}>
+                        {c.months_owed}
+                      </span>
+                    </td>
+                    <td style={{ padding: '9px 10px', color: '#a60a08', fontWeight: 700, whiteSpace: 'nowrap' }}>{formatKES(amtOwed)}</td>
+                    <td style={{ padding: '9px 10px', color: neverPaid ? '#a60a08' : '#d3d3d3', whiteSpace: 'nowrap', fontSize: '12px' }}>{lastPaid}</td>
+                    <td style={{ padding: '9px 10px' }}>
+                      <span style={{
+                        background: c.payment_status === 'overdue' ? '#450a0a' : c.payment_status === 'pending' ? '#1a2e1a' : '#1a1a1a',
+                        color: c.payment_status === 'overdue' ? '#fca5a5' : c.payment_status === 'pending' ? '#86efac' : '#d3d3d3',
+                        borderRadius: '4px', padding: '2px 7px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase',
+                      }}>
+                        {c.payment_status || 'unknown'}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            {/* Totals */}
+            <tfoot>
+              <tr style={{ borderTop: '2px solid #333' }}>
+                <td colSpan={6} style={{ padding: '9px 10px', color: '#555', fontFamily: 'Oswald, sans-serif', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                  Total ({filtered.length} client{filtered.length !== 1 ? 's' : ''})
+                </td>
+                <td style={{ padding: '9px 10px', color: '#a60a08', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                  {formatKES(filtered.reduce((s, c) => s + Number(c.amount_owed || 0), 0))}
+                </td>
+                <td colSpan={2} />
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // RevenueView — all-payments ledger with KPI summary
 // ─────────────────────────────────────────────────────────────
 
@@ -1717,6 +1900,32 @@ function RevenueView({ adminKey }) {
   const [filter, setFilter] = useState('');
   const [period, setPeriod] = useState('month'); // 'week' | 'month' | 'year' | 'all'
   const [showImport, setShowImport] = useState(false);
+
+  function exportLedgerCSV() {
+    const rows = [
+      ['Date', 'Client', 'Plan', 'Amount (KES)', 'Method', 'Rent Split (KES)', 'Net Revenue (KES)', 'Source', 'Notes'],
+      ...filtered.map(p => [
+        new Date(p.payment_date).toLocaleDateString('en-KE'),
+        p.clients?.full_name || '',
+        p.plan_id || '',
+        Number(p.amount),
+        paymentMethodLabel(p.payment_method),
+        Number(p.rent_split),
+        Number(p.net_revenue),
+        p.source || '',
+        p.notes || '',
+      ]),
+    ];
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `AMSC_payments_${period}_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
 
   async function fetchAll() {
     setLoading(true);
@@ -1875,12 +2084,21 @@ function RevenueView({ adminKey }) {
             <button key={key} onClick={() => setPeriod(key)} style={tabStyle(period === key)}>{label}</button>
           ))}
         </div>
-        <button
-          onClick={() => setShowImport(true)}
-          style={{ background: 'transparent', border: '1px solid #333', color: '#d3d3d3', borderRadius: '6px', padding: '5px 14px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', marginBottom: '4px', letterSpacing: '0.05em' }}
-        >
-          ↑ Import Records
-        </button>
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '4px' }}>
+          <button
+            onClick={exportLedgerCSV}
+            disabled={filtered.length === 0}
+            style={{ background: 'transparent', border: '1px solid #333', color: '#d3d3d3', borderRadius: '6px', padding: '5px 14px', fontSize: '12px', fontWeight: 600, cursor: filtered.length === 0 ? 'not-allowed' : 'pointer', opacity: filtered.length === 0 ? 0.4 : 1, letterSpacing: '0.05em' }}
+          >
+            ↓ Export CSV
+          </button>
+          <button
+            onClick={() => setShowImport(true)}
+            style={{ background: 'transparent', border: '1px solid #333', color: '#d3d3d3', borderRadius: '6px', padding: '5px 14px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', letterSpacing: '0.05em' }}
+          >
+            ↑ Import Records
+          </button>
+        </div>
       </div>
 
       {/* KPI strip */}
@@ -2160,7 +2378,7 @@ export default function AdminPage() {
             {/* Top-level tab switcher: Applications | Revenue */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '20px', borderBottom: '1px solid #222', paddingBottom: '0' }}>
               <div style={{ display: 'flex', gap: '4px' }}>
-                {[['applications', 'Applications'], ['revenue', 'Revenue']].map(([key, label]) => (
+                {[['applications', 'Applications'], ['revenue', 'Revenue'], ['arrears', 'Arrears']].map(([key, label]) => (
                   <button
                     key={key}
                     onClick={() => setActiveTab(key)}
@@ -2195,6 +2413,11 @@ export default function AdminPage() {
             {/* Revenue tab */}
             {activeTab === 'revenue' && (
               <RevenueView adminKey={adminKey} />
+            )}
+
+            {/* Arrears tab */}
+            {activeTab === 'arrears' && (
+              <ArrearsView adminKey={adminKey} />
             )}
 
             {/* Applications tab */}
