@@ -68,7 +68,6 @@ export async function GET(request) {
       planName: plan?.name || client.selected_plan,
       billingAnchor: anchorDate.toISOString(),
       nextDueDate: nextDue.toISOString(),
-      cycleDay: anchorDate.getDate(),
       isAutoRenew,
       currency: 'KES',
       displayPrice: Number(displayPrice),

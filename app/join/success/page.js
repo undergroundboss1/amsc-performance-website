@@ -53,9 +53,9 @@ function BillingScheduleCard({ reference }) {
 
       {/* Explanation */}
       <p className="text-white/50 font-body text-sm leading-relaxed mb-4">
-        Your billing resets on the <strong className="text-white/80">{info.cycleDay}{info.cycleDay === 1 ? 'st' : info.cycleDay === 2 ? 'nd' : info.cycleDay === 3 ? 'rd' : 'th'} of each month</strong>.
-        {' '}This means even if you pay mid-month, your next charge comes on that fixed date — not 30 days later.
-        {' '}This keeps your billing consistent every month.
+        Your billing runs on a <strong className="text-white/80">30-day cycle from your training start date</strong>.
+        {' '}This means your next charge is 30 days after you started — not 30 days after you paid.
+        {' '}If you paid late, your next due date will be sooner than you might expect.
       </p>
 
       {info.isAutoRenew ? (
