@@ -442,6 +442,11 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
   const [startDateSaving, setStartDateSaving] = useState(false);
   const [startDateResult, setStartDateResult] = useState(null); // { success, message }
 
+  // AMSC Metrics link state
+  const [metricsId, setMetricsId] = useState(client.amsc_metrics_athlete_id || '');
+  const [metricsSaving, setMetricsSaving] = useState(false);
+  const [metricsResult, setMetricsResult] = useState(null);
+
   async function handleSavePricing(e) {
     e.preventDefault();
     setPricingLoading(true);
@@ -585,6 +590,26 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
       setStartDateResult({ success: false, message: 'Network error. Please try again.' });
     } finally {
       setStartDateSaving(false);
+    }
+  }
+
+  async function saveMetricsId() {
+    setMetricsSaving(true);
+    setMetricsResult(null);
+    try {
+      const res = await fetch('/api/admin/update-client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminKey}` },
+        body: JSON.stringify({ clientId: client.id, amscMetricsAthleteId: metricsId || null }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setMetricsResult({ success: false, message: data.error || 'Failed to save.' }); return; }
+      setClient(c => ({ ...c, amsc_metrics_athlete_id: metricsId || null }));
+      setMetricsResult({ success: true, message: metricsId ? 'AMSC Metrics linked.' : 'Link removed.' });
+    } catch {
+      setMetricsResult({ success: false, message: 'Network error.' });
+    } finally {
+      setMetricsSaving(false);
     }
   }
 
@@ -956,6 +981,58 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
           {startDateResult && (
             <p className={`text-xs font-body mt-2 ${startDateResult.success ? 'text-green-400' : 'text-red-400'}`}>
               {startDateResult.message}
+            </p>
+          )}
+        </div>
+
+        {/* AMSC Metrics Link */}
+        <div className="border-t border-white/5 pt-4 mt-2">
+          <p className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 mb-1">
+            AMSC Metrics
+          </p>
+          {client.amsc_metrics_athlete_id ? (
+            <div className="flex items-center gap-3 mb-3">
+              <a
+                href={`https://amscmetrics.com/athletes/${client.amsc_metrics_athlete_id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 bg-accent/10 border border-accent/30 text-accent rounded-lg px-4 py-2.5 font-display font-bold text-xs tracking-wider uppercase hover:bg-accent/20 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                View in AMSC Metrics
+              </a>
+              <span className="text-white/30 font-body text-xs">ID: {client.amsc_metrics_athlete_id}</span>
+            </div>
+          ) : (
+            <p className="text-white/30 font-body text-xs mb-3">Not linked — enter the athlete ID from AMSC Metrics to connect their profiles.</p>
+          )}
+          <div className="flex items-center gap-3">
+            <input
+              type="text"
+              value={metricsId}
+              onChange={e => { setMetricsId(e.target.value); setMetricsResult(null); }}
+              placeholder="AMSC Metrics Athlete ID"
+              className="flex-1 bg-background border border-white/10 rounded-lg px-4 py-2.5 text-white font-body text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all"
+            />
+            {metricsId && metricsId !== (client.amsc_metrics_athlete_id || '') && (
+              <button
+                onClick={() => { setMetricsId(client.amsc_metrics_athlete_id || ''); setMetricsResult(null); }}
+                className="px-3 py-2.5 text-white/30 hover:text-white/60 font-body text-xs transition-colors cursor-pointer"
+              >✕</button>
+            )}
+            <button
+              onClick={saveMetricsId}
+              disabled={metricsSaving}
+              className="px-5 py-2.5 bg-accent text-white font-display font-bold text-xs tracking-wider uppercase rounded-lg hover:bg-accent-dark transition-all cursor-pointer disabled:opacity-50"
+            >
+              {metricsSaving ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+          {metricsResult && (
+            <p className={`text-xs font-body mt-2 ${metricsResult.success ? 'text-green-400' : 'text-red-400'}`}>
+              {metricsResult.message}
             </p>
           )}
         </div>

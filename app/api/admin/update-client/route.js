@@ -34,7 +34,7 @@ export async function POST(request) {
 
   try {
     const body = await request.json();
-    const { clientId, trainingStartDate, discountPercent, customMonthlyRate, partnershipNote } = body;
+    const { clientId, trainingStartDate, discountPercent, customMonthlyRate, partnershipNote, amscMetricsAthleteId } = body;
 
     if (!clientId) {
       return NextResponse.json({ error: 'clientId is required.' }, { status: 400 });
@@ -96,6 +96,12 @@ export async function POST(request) {
     if ('partnershipNote' in body) {
       updates.partnership_note =
         partnershipNote === null || partnershipNote === '' ? null : String(partnershipNote).trim();
+    }
+
+    // ── amscMetricsAthleteId ──────────────────────────────────────────────
+    if ('amscMetricsAthleteId' in body) {
+      updates.amsc_metrics_athlete_id =
+        amscMetricsAthleteId === null || amscMetricsAthleteId === '' ? null : String(amscMetricsAthleteId).trim();
     }
 
     if (Object.keys(updates).length === 0) {
