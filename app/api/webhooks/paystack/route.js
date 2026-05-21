@@ -90,7 +90,7 @@ export async function POST(request) {
         // Fetch client to get their ID and plan info
         const { data: clientForPayment } = await supabase
           .from('clients')
-          .select('id, selected_plan, plan_price')
+          .select('id, selected_plan, plan_price, training_start_date')
           .eq('payment_reference', reference)
           .single();
 
@@ -98,6 +98,16 @@ export async function POST(request) {
           // Determine payment method from Paystack channel
           const paymentMethod =
             data.channel === 'mobile_money' ? 'paystack_mpesa' : 'paystack_card';
+
+          // Auto-anchor billing cycle on first payment if training_start_date not set.
+          // Admin can override later via update-client if the actual training start differs.
+          if (!clientForPayment.training_start_date) {
+            await supabase
+              .from('clients')
+              .update({ training_start_date: paidAt })
+              .eq('id', clientForPayment.id);
+            console.log(`Billing anchor set to first payment date for client ${clientForPayment.id}`);
+          }
 
           const { error: paymentInsertError } = await supabase
             .from('payments')

@@ -769,6 +769,31 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
         {/* Payment timing — detailed mode shows provider */}
         <PaymentTimingBar client={client} detailed />
 
+        {/* ── Missing training start date warning ───────────────────────────── */}
+        {client.application_status === 'approved' && !client.training_start_date && (
+          <div style={{ background: '#422006', border: '1px solid #854d0e', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+            <div>
+              <p style={{ fontFamily: 'Oswald, sans-serif', fontWeight: 700, fontSize: '12px', letterSpacing: '0.08em', color: '#fbbf24', textTransform: 'uppercase', margin: '0 0 3px 0' }}>
+                ⚠ Billing cycle not anchored
+              </p>
+              <p style={{ color: '#d97706', fontSize: '12px', margin: 0 }}>
+                Training start date is not set. Billing defaults to first payment date. Set it if the client started training before they paid.
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                // Scroll to training start date field in the Pricing Override section
+                const el = document.getElementById('training-start-date-field');
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                el?.focus();
+              }}
+              style={{ background: '#854d0e', border: 'none', color: '#fef3c7', borderRadius: '6px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}
+            >
+              Set Date →
+            </button>
+          </div>
+        )}
+
         {/* ── Pricing Override ───────────────────────────────── */}
         <div style={{ borderTop: '1px solid #1a1a1a', paddingTop: '16px', marginTop: '4px' }}>
           {/* Effective rate display */}
@@ -891,7 +916,7 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
         )}
 
         {/* Training Start Date editor */}
-        <div className="border-t border-white/5 pt-4">
+        <div id="training-start-date-field" className="border-t border-white/5 pt-4">
           <p className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 mb-1">
             Training Start Date
           </p>

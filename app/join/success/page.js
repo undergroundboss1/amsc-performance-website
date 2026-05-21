@@ -1,8 +1,85 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useEffect } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
+
+function formatDate(iso) {
+  return new Date(iso).toLocaleDateString('en-KE', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function BillingScheduleCard({ reference }) {
+  const [info, setInfo] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!reference) { setLoading(false); return; }
+    fetch(`/api/billing-info?reference=${encodeURIComponent(reference)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { setInfo(data); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [reference]);
+
+  if (loading || !info) return null;
+
+  return (
+    <div className="bg-surface border border-white/5 rounded-xl p-8 text-left mb-8">
+      <div className="flex items-center gap-3 mb-5">
+        <span className="flex-shrink-0 w-8 h-8 rounded-full bg-accent/20 text-accent flex items-center justify-center">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+        </span>
+        <h2 className="font-display font-bold text-sm tracking-widest uppercase text-white/60">
+          Your Billing Schedule
+        </h2>
+      </div>
+
+      {/* Key dates */}
+      <div className="grid grid-cols-2 gap-4 mb-5">
+        <div className="bg-white/5 rounded-lg p-4">
+          <p className="text-white/40 font-body text-xs mb-1">Billing cycle anchored to</p>
+          <p className="text-white font-display font-bold text-sm tracking-wide">
+            {formatDate(info.billingAnchor)}
+          </p>
+        </div>
+        <div className="bg-accent/10 border border-accent/20 rounded-lg p-4">
+          <p className="text-accent/70 font-body text-xs mb-1">Next payment due</p>
+          <p className="text-white font-display font-bold text-sm tracking-wide">
+            {formatDate(info.nextDueDate)}
+          </p>
+        </div>
+      </div>
+
+      {/* Explanation */}
+      <p className="text-white/50 font-body text-sm leading-relaxed mb-4">
+        Your billing resets on the <strong className="text-white/80">{info.cycleDay}{info.cycleDay === 1 ? 'st' : info.cycleDay === 2 ? 'nd' : info.cycleDay === 3 ? 'rd' : 'th'} of each month</strong>.
+        {' '}This means even if you pay mid-month, your next charge comes on that fixed date — not 30 days later.
+        {' '}This keeps your billing consistent every month.
+      </p>
+
+      {info.isAutoRenew ? (
+        <div className="flex items-start gap-2 bg-green-900/20 border border-green-500/20 rounded-lg px-4 py-3">
+          <svg className="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <p className="text-green-400 font-body text-sm">
+            You&apos;re on <strong>auto-renewal</strong> — your card will be charged automatically on {formatDate(info.nextDueDate)}. No action needed.
+          </p>
+        </div>
+      ) : (
+        <div className="flex items-start gap-2 bg-yellow-900/20 border border-yellow-500/20 rounded-lg px-4 py-3">
+          <svg className="w-4 h-4 text-yellow-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+          </svg>
+          <p className="text-yellow-400 font-body text-sm">
+            <strong>Save this date:</strong> {formatDate(info.nextDueDate)}. You&apos;ll receive a reminder before your next payment is due.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function SuccessContent() {
   const searchParams = useSearchParams();
@@ -36,6 +113,9 @@ function SuccessContent() {
             </p>
           )}
         </div>
+
+        {/* Billing Schedule */}
+        <BillingScheduleCard reference={reference} />
 
         {/* What Happens Next */}
         <div className="bg-surface border border-white/5 rounded-xl p-8 text-left mb-8">
