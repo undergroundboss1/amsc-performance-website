@@ -24,6 +24,27 @@ import { getSupabase } from '../../../../lib/supabase';
  *
  *   partnershipNote    — string (or null to clear)
  *     Free-text context for the pricing override, e.g. "NPH athlete partnership".
+ *
+ *   trainingStatus     — 'active' | 'inactive'
+ *     Marks the client as actively training or temporarily paused. Setting to
+ *     'inactive' auto-stamps inactive_since (if not already set) and suppresses
+ *     the overdue billing indicator. Setting back to 'active' clears the pause
+ *     fields (but preserves pause_credit_days so the billing credit stays live).
+ *
+ *   inactiveReason     — string (or null to clear)
+ *     Why the client is paused, e.g. "Injury", "Travel". Free text or preset.
+ *
+ *   expectedReturnDate — ISO date string (or null to clear)
+ *     Estimated date the client plans to resume training.
+ *
+ *   pauseCreditApproved — boolean
+ *     Admin marks that carry-over credit is approved for this pause. Use for
+ *     genuine emergencies only — not uncommitment or laziness.
+ *
+ *   pauseCreditDays    — integer 0–31
+ *     Number of unused days to carry forward into the next billing cycle. The
+ *     billing window is extended by this many days on the client's return.
+ *     Persists after reactivation until the admin manually clears it.
  */
 export async function POST(request) {
   // ── Auth ───────────────────────────────────────────────────────────────────
@@ -34,11 +55,17 @@ export async function POST(request) {
 
   try {
     const body = await request.json();
-    const { clientId, trainingStartDate, discountPercent, customMonthlyRate, partnershipNote, amscMetricsAthleteId } = body;
+    const {
+      clientId,
+      trainingStartDate, discountPercent, customMonthlyRate, partnershipNote, amscMetricsAthleteId,
+      trainingStatus, inactiveReason, expectedReturnDate, pauseCreditApproved, pauseCreditDays,
+    } = body;
 
     if (!clientId) {
       return NextResponse.json({ error: 'clientId is required.' }, { status: 400 });
     }
+
+    const supabase = getSupabase();
 
     // Build the update payload — only include fields that were provided
     const updates = {};
@@ -104,11 +131,78 @@ export async function POST(request) {
         amscMetricsAthleteId === null || amscMetricsAthleteId === '' ? null : String(amscMetricsAthleteId).trim();
     }
 
+    // ── trainingStatus ────────────────────────────────────────────────────
+    if ('trainingStatus' in body) {
+      if (!['active', 'inactive'].includes(trainingStatus)) {
+        return NextResponse.json(
+          { error: "trainingStatus must be 'active' or 'inactive'." },
+          { status: 400 }
+        );
+      }
+      updates.training_status = trainingStatus;
+
+      if (trainingStatus === 'inactive') {
+        // Fetch current record to check if inactive_since is already set
+        const { data: current } = await supabase
+          .from('clients')
+          .select('inactive_since')
+          .eq('id', clientId)
+          .single();
+        if (!current?.inactive_since) {
+          updates.inactive_since = new Date().toISOString();
+        }
+      } else if (trainingStatus === 'active') {
+        // Clear pause fields on reactivation — but preserve pause_credit_days
+        updates.inactive_since = null;
+        updates.inactive_reason = null;
+        updates.expected_return_date = null;
+        updates.pause_credit_approved = false;
+      }
+    }
+
+    // ── inactiveReason ────────────────────────────────────────────────────
+    if ('inactiveReason' in body) {
+      updates.inactive_reason =
+        inactiveReason === null || inactiveReason === '' ? null : String(inactiveReason).trim();
+    }
+
+    // ── expectedReturnDate ────────────────────────────────────────────────
+    if ('expectedReturnDate' in body) {
+      if (expectedReturnDate === null || expectedReturnDate === '') {
+        updates.expected_return_date = null;
+      } else {
+        const parsed = new Date(expectedReturnDate);
+        if (isNaN(parsed.getTime())) {
+          return NextResponse.json(
+            { error: 'Invalid expectedReturnDate. Expected ISO date string or null.' },
+            { status: 400 }
+          );
+        }
+        updates.expected_return_date = parsed.toISOString().split('T')[0];
+      }
+    }
+
+    // ── pauseCreditApproved ───────────────────────────────────────────────
+    if ('pauseCreditApproved' in body) {
+      updates.pause_credit_approved = Boolean(pauseCreditApproved);
+    }
+
+    // ── pauseCreditDays ───────────────────────────────────────────────────
+    if ('pauseCreditDays' in body) {
+      const days = parseInt(pauseCreditDays, 10);
+      if (isNaN(days) || days < 0 || days > 31) {
+        return NextResponse.json(
+          { error: 'pauseCreditDays must be an integer between 0 and 31.' },
+          { status: 400 }
+        );
+      }
+      updates.pause_credit_days = days;
+    }
+
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ error: 'No valid fields to update.' }, { status: 400 });
     }
 
-    const supabase = getSupabase();
     const { error } = await supabase
       .from('clients')
       .update(updates)

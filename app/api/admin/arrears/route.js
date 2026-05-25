@@ -19,7 +19,15 @@ export async function GET(request) {
   try {
     const supabase = getSupabase();
 
-    const { data, error } = await supabase
+    // Get IDs of clients who are currently on a training pause — they should
+    // not appear as debtors while their billing clock is suppressed.
+    const { data: inactiveData } = await supabase
+      .from('clients')
+      .select('id')
+      .eq('training_status', 'inactive');
+    const inactiveIds = (inactiveData || []).map((c) => c.id);
+
+    let query = supabase
       .from('client_payment_summary')
       .select(
         'id, full_name, selected_plan, plan_price, effective_price, ' +
@@ -29,6 +37,12 @@ export async function GET(request) {
       )
       .gt('months_owed', 0)
       .order('amount_owed', { ascending: false });
+
+    if (inactiveIds.length > 0) {
+      query = query.not('id', 'in', `(${inactiveIds.join(',')})`);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error('arrears query error:', error);

@@ -218,7 +218,7 @@ function StepChoosePlan({ selectedPlan, onSelect, onNext }) {
 }
 
 /* ─── Step 2: Application Form ────────────────────────── */
-function StepApplication({ form, onChange, errors, onSubmit, onBack, submitting, selectedPlan }) {
+function StepApplication({ form, onChange, onPolicyToggle, errors, onSubmit, onBack, submitting, selectedPlan }) {
   const plan = getPlanById(selectedPlan);
 
   return (
@@ -409,6 +409,42 @@ function StepApplication({ form, onChange, errors, onSubmit, onBack, submitting,
           </p>
         </div>
 
+        {/* Payment policy agreement */}
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={form.agreedToPolicy}
+          onClick={onPolicyToggle}
+          className="w-full text-left flex items-start gap-3 p-4 bg-surface border border-white/10 rounded-lg hover:border-white/20 transition-colors cursor-pointer group"
+        >
+          <span
+            className={`flex-shrink-0 w-5 h-5 mt-0.5 rounded border-2 flex items-center justify-center transition-all ${
+              form.agreedToPolicy
+                ? 'bg-accent border-accent'
+                : 'border-white/30 group-hover:border-white/50'
+            }`}
+          >
+            {form.agreedToPolicy && (
+              <svg className="w-3 h-3 text-white" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+              </svg>
+            )}
+          </span>
+          <p className="text-secondary text-sm font-body leading-relaxed">
+            I have read and agree to the{' '}
+            <a
+              href="/payment-policy"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={e => e.stopPropagation()}
+              className="text-accent hover:underline"
+            >
+              AMSC Payment Policy
+            </a>
+            . I understand that monthly fees are non-refundable and that payment is due within 7 days of my billing date.
+          </p>
+        </button>
+
         {/* Navigation */}
         <div className="flex items-center justify-between pt-4">
           <button
@@ -535,10 +571,15 @@ function JoinFlow() {
     availability: '',
     healthInfo: '',
     referralSource: '',
+    agreedToPolicy: false,
   });
 
   function handleFormChange(e) {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  }
+
+  function handlePolicyToggle() {
+    setForm((prev) => ({ ...prev, agreedToPolicy: !prev.agreedToPolicy }));
   }
 
   function validateForm() {
@@ -555,6 +596,8 @@ function JoinFlow() {
       errs.push('Please tell us about your training goals.');
     if (!form.availability.trim())
       errs.push('Please enter your training availability.');
+    if (!form.agreedToPolicy)
+      errs.push('Please read and agree to the AMSC Payment Policy to continue.');
     return errs;
   }
 
@@ -624,6 +667,7 @@ function JoinFlow() {
           <StepApplication
             form={form}
             onChange={handleFormChange}
+            onPolicyToggle={handlePolicyToggle}
             errors={formErrors}
             submitting={submitting}
             selectedPlan={selectedPlan}
