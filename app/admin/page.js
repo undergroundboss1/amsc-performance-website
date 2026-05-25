@@ -38,10 +38,19 @@ function paymentMethodLabel(method) {
 }
 
 function getPaymentTiming(client) {
+  // Paused clients: suppress the billing clock entirely
+  if (client.training_status === 'inactive') {
+    return { paused: true, inactiveSince: client.inactive_since };
+  }
+
   if (!client.last_paid_at && !client.training_start_date) return null;
 
   const now = new Date();
-  const lastPaid = client.last_paid_at ? new Date(client.last_paid_at) : null;
+  // Factor in carry-over credit days: shift last_paid_at forward so the billing
+  // window is extended by the number of unused days credited from a previous pause.
+  const rawLastPaid = client.last_paid_at ? new Date(client.last_paid_at) : null;
+  const creditMs = (client.pause_credit_days || 0) * 24 * 60 * 60 * 1000;
+  const lastPaid = rawLastPaid ? new Date(rawLastPaid.getTime() + creditMs) : null;
   const isAutoRenew = client.payment_provider === 'paystack'; // card — Paystack handles renewals
 
   // If training_start_date is set, use it as the billing cycle anchor.
@@ -87,6 +96,26 @@ function PaymentTimingBar({ client, detailed = false }) {
   const timing = getPaymentTiming(client);
   const isOverdue = client.payment_status === 'overdue';
 
+  // Paused clients: show a neutral amber bar instead of any billing indicator
+  if (timing?.paused) {
+    return (
+      <div className="rounded-lg p-3 mb-4 bg-yellow-500/5 border border-yellow-500/15">
+        <span className="text-[10px] font-display font-bold tracking-widest uppercase text-yellow-400/80 block mb-1">
+          Training Paused
+        </span>
+        <span className="text-yellow-300 text-sm font-body">
+          Since {timing.inactiveSince ? formatDate(new Date(timing.inactiveSince)) : '—'}
+          {client.inactive_reason ? ` · ${client.inactive_reason}` : ''}
+        </span>
+        {client.pause_credit_approved && client.pause_credit_days > 0 && (
+          <span className="text-yellow-400/60 text-xs font-body block mt-1">
+            {client.pause_credit_days} credit day{client.pause_credit_days !== 1 ? 's' : ''} approved
+          </span>
+        )}
+      </div>
+    );
+  }
+
   if (!timing && !isOverdue) return null;
   if (client.payment_status === 'pending' || client.payment_status === 'cancelled') return null;
 
@@ -116,56 +145,64 @@ function PaymentTimingBar({ client, detailed = false }) {
   }
 
   return (
-    <div className={`grid grid-cols-${dueValue ? '3' : '2'} gap-3 rounded-lg p-3 mb-4 ${
-      isOverdue || (timing && timing.daysOverdue > 0)
-        ? 'bg-red-900/10 border border-red-500/15'
-        : timing && timing.daysUntilDue <= 7 && !timing.isAutoRenew
-        ? 'bg-yellow-500/5 border border-yellow-500/15'
-        : 'bg-surface-light border border-white/5'
-    }`}>
-      {/* Last Paid */}
-      <div>
-        <span className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">
-          Last Paid
-        </span>
-        <span className="text-white text-sm font-body">
-          {timing ? formatDate(timing.lastPaid) : '—'}
-        </span>
-      </div>
-
-      {/* Next Due / Auto-renews */}
-      {dueValue && (
-        <div>
-          <span className={`text-[10px] font-display font-bold tracking-widest uppercase block mb-1 ${dueLabelColor}`}>
-            {dueLabel}
-          </span>
-          <span className={`text-sm font-body font-semibold ${
-            isOverdue || (timing && timing.daysOverdue > 0)
-              ? 'text-[#a60a08]'
-              : timing && timing.daysUntilDue <= 7 && !timing.isAutoRenew
-              ? 'text-yellow-400'
-              : 'text-white'
-          }`}>
-            {dueValue}
-          </span>
-        </div>
-      )}
-
-      {/* Provider or Cycle Anchor indicator */}
-      {detailed && (
+    <>
+      <div className={`grid grid-cols-${dueValue ? '3' : '2'} gap-3 rounded-lg p-3 mb-2 ${
+        isOverdue || (timing && timing.daysOverdue > 0)
+          ? 'bg-red-900/10 border border-red-500/15'
+          : timing && timing.daysUntilDue <= 7 && !timing.isAutoRenew
+          ? 'bg-yellow-500/5 border border-yellow-500/15'
+          : 'bg-surface-light border border-white/5'
+      }`}>
+        {/* Last Paid */}
         <div>
           <span className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">
-            {timing?.usingStartDate ? 'Cycle Anchor' : 'Method'}
+            Last Paid
           </span>
           <span className="text-white text-sm font-body">
-            {timing?.usingStartDate
-              ? <span className="text-accent/80 text-xs">From start date</span>
-              : providerLabel(client.payment_provider)
-            }
+            {timing ? formatDate(timing.lastPaid) : '—'}
           </span>
         </div>
+
+        {/* Next Due / Auto-renews */}
+        {dueValue && (
+          <div>
+            <span className={`text-[10px] font-display font-bold tracking-widest uppercase block mb-1 ${dueLabelColor}`}>
+              {dueLabel}
+            </span>
+            <span className={`text-sm font-body font-semibold ${
+              isOverdue || (timing && timing.daysOverdue > 0)
+                ? 'text-[#a60a08]'
+                : timing && timing.daysUntilDue <= 7 && !timing.isAutoRenew
+                ? 'text-yellow-400'
+                : 'text-white'
+            }`}>
+              {dueValue}
+            </span>
+          </div>
+        )}
+
+        {/* Provider or Cycle Anchor indicator */}
+        {detailed && (
+          <div>
+            <span className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">
+              {timing?.usingStartDate ? 'Cycle Anchor' : 'Method'}
+            </span>
+            <span className="text-white text-sm font-body">
+              {timing?.usingStartDate
+                ? <span className="text-accent/80 text-xs">From start date</span>
+                : providerLabel(client.payment_provider)
+              }
+            </span>
+          </div>
+        )}
+      </div>
+      {/* Credit days carry-over indicator — shown when active with a credit balance */}
+      {client.pause_credit_days > 0 && (
+        <p className="text-yellow-400/60 text-xs font-body mb-4 px-1">
+          +{client.pause_credit_days} credit day{client.pause_credit_days !== 1 ? 's' : ''} applied from previous pause
+        </p>
       )}
-    </div>
+    </>
   );
 }
 
@@ -230,6 +267,10 @@ function PaymentLinkBox({ paymentLink, client, label = 'Payment Link Generated �
 // Status badge helpers
 // ─────────────────────────────────────────────────────────────
 
+const INACTIVE_REASONS = [
+  'Injury', 'Travel', 'Financial hold', 'Competition break', 'Personal', 'Other',
+];
+
 const appStatusColors = {
   pending_review: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
   approved: 'bg-green-500/20 text-green-400 border-green-500/30',
@@ -254,6 +295,11 @@ function StatusBadges({ client }) {
       {payColor && (
         <span className={`text-[10px] font-display font-bold tracking-widest uppercase px-3 py-1 rounded-full border ${payColor}`}>
           {client.payment_status}
+        </span>
+      )}
+      {client.training_status === 'inactive' && (
+        <span className="text-[10px] font-display font-bold tracking-widest uppercase px-3 py-1 rounded-full border bg-yellow-500/10 text-yellow-400 border-yellow-500/20">
+          PAUSED
         </span>
       )}
     </div>
@@ -342,6 +388,14 @@ function ApplicationCard({ client, adminKey, onUpdate, onClick }) {
             {client.full_name}
           </h3>
           <p className="text-secondary text-sm font-body">{client.email} &middot; {client.phone}</p>
+          {client.training_status === 'inactive' && client.inactive_reason && (
+            <p className="text-yellow-400/70 text-xs font-body mt-1">
+              Paused — {client.inactive_reason}
+              {client.expected_return_date
+                ? ` · Returns ${formatDate(new Date(client.expected_return_date))}`
+                : ''}
+            </p>
+          )}
         </div>
         <StatusBadges client={client} />
       </div>
@@ -446,6 +500,20 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
   const [metricsId, setMetricsId] = useState(client.amsc_metrics_athlete_id || '');
   const [metricsSaving, setMetricsSaving] = useState(false);
   const [metricsResult, setMetricsResult] = useState(null);
+
+  // Training status state
+  const [trainingStatus, setTrainingStatus] = useState(client.training_status || 'active');
+  const [inactiveReason, setInactiveReason] = useState(client.inactive_reason || '');
+  const [expectedReturn, setExpectedReturn] = useState(
+    client.expected_return_date
+      ? new Date(client.expected_return_date).toISOString().split('T')[0]
+      : ''
+  );
+  const [pauseCreditApproved, setPauseCreditApproved] = useState(client.pause_credit_approved || false);
+  const [pauseCreditDays, setPauseCreditDays] = useState(client.pause_credit_days || 0);
+  const [statusSaving, setStatusSaving] = useState(false);
+  const [statusResult, setStatusResult] = useState(null);
+  const [showStatusEditor, setShowStatusEditor] = useState(false);
 
   async function handleSavePricing(e) {
     e.preventDefault();
@@ -613,6 +681,60 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
     }
   }
 
+  async function saveTrainingStatus() {
+    setStatusSaving(true);
+    setStatusResult(null);
+    try {
+      const body = {
+        clientId: client.id,
+        trainingStatus,
+        inactiveReason: trainingStatus === 'inactive' ? (inactiveReason || null) : null,
+        expectedReturnDate: trainingStatus === 'inactive' ? (expectedReturn || null) : null,
+        pauseCreditApproved: trainingStatus === 'inactive' ? pauseCreditApproved : false,
+        pauseCreditDays: trainingStatus === 'inactive' ? pauseCreditDays : (client.pause_credit_days || 0),
+      };
+      const res = await fetch('/api/admin/update-client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminKey}` },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) { setStatusResult({ success: false, message: data.error || 'Failed to save.' }); return; }
+      setClient(c => ({
+        ...c,
+        training_status: trainingStatus,
+        inactive_reason: body.inactiveReason,
+        expected_return_date: body.expectedReturnDate,
+        pause_credit_approved: body.pauseCreditApproved,
+        pause_credit_days: body.pauseCreditDays,
+        inactive_since: trainingStatus === 'inactive'
+          ? (c.inactive_since || new Date().toISOString())
+          : null,
+      }));
+      setShowStatusEditor(false);
+      setStatusResult({ success: true, message: trainingStatus === 'inactive' ? 'Client marked inactive.' : 'Client reactivated.' });
+      onUpdate();
+    } catch {
+      setStatusResult({ success: false, message: 'Network error.' });
+    } finally {
+      setStatusSaving(false);
+    }
+  }
+
+  async function clearCredit() {
+    try {
+      const res = await fetch('/api/admin/update-client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminKey}` },
+        body: JSON.stringify({ clientId: client.id, pauseCreditDays: 0, pauseCreditApproved: false }),
+      });
+      if (!res.ok) return;
+      setClient(c => ({ ...c, pause_credit_days: 0, pause_credit_approved: false }));
+      setPauseCreditDays(0);
+      setPauseCreditApproved(false);
+    } catch { /* silent */ }
+  }
+
   async function handlePlanChange() {
     if (!planChanged || !selectedPlanObj) return;
     setPlanChanging(true);
@@ -751,6 +873,194 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
             <span className="text-white text-sm font-body">{client.sport || '—'}</span>
           </div>
         </div>
+      </div>
+
+      {/* ── TRAINING STATUS ──────────────────────────────────── */}
+      <div className="bg-surface border border-white/5 rounded-xl p-6 mb-4">
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-[10px] font-display font-bold tracking-widest uppercase text-accent">Training Status</p>
+          <button
+            onClick={() => { setShowStatusEditor(s => !s); setStatusResult(null); }}
+            className="px-3 py-1.5 text-[10px] font-display font-bold tracking-wider uppercase border border-white/10 rounded-full text-white/60 hover:border-white/30 hover:text-white transition-colors cursor-pointer"
+          >
+            {showStatusEditor ? 'Cancel' : 'Edit'}
+          </button>
+        </div>
+
+        {/* Status display */}
+        {!showStatusEditor && (
+          <div>
+            {client.training_status === 'inactive' ? (
+              <>
+                <span className="inline-flex items-center gap-2 text-xs font-display font-bold tracking-widest uppercase px-3 py-1 rounded-full bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 mb-2">
+                  PAUSED since {client.inactive_since ? formatDate(new Date(client.inactive_since)) : '—'}
+                </span>
+                {client.inactive_reason && (
+                  <p className="text-yellow-300/70 text-sm font-body mt-1">{client.inactive_reason}</p>
+                )}
+                {client.expected_return_date && (
+                  <p className="text-white/40 text-xs font-body mt-1">
+                    Expected return: {formatDate(new Date(client.expected_return_date))}
+                  </p>
+                )}
+                {client.pause_credit_approved && client.pause_credit_days > 0 && (
+                  <p className="text-yellow-400/60 text-xs font-body mt-1">
+                    {client.pause_credit_days} credit day{client.pause_credit_days !== 1 ? 's' : ''} approved
+                  </p>
+                )}
+              </>
+            ) : (
+              <div className="flex items-center gap-3">
+                <span className="inline-flex items-center gap-2 text-xs font-display font-bold tracking-widest uppercase px-3 py-1 rounded-full bg-green-500/10 text-green-400 border border-green-500/20">
+                  ACTIVE
+                </span>
+                {client.pause_credit_days > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-yellow-400/70 text-xs font-body">
+                      Credit: {client.pause_credit_days} day{client.pause_credit_days !== 1 ? 's' : ''} remaining
+                    </span>
+                    <button
+                      onClick={clearCredit}
+                      className="text-[10px] font-display font-bold tracking-wider uppercase px-2 py-1 border border-white/10 rounded-full text-white/40 hover:border-red-500/30 hover:text-red-400 transition-colors cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Editor */}
+        {showStatusEditor && (
+          <div className="space-y-4">
+            {/* Active / Inactive toggle */}
+            <div className="flex gap-2">
+              {['active', 'inactive'].map(s => (
+                <button
+                  key={s}
+                  onClick={() => { setTrainingStatus(s); if (s === 'active') { setPauseCreditApproved(false); } }}
+                  className={`flex-1 py-2.5 text-[11px] font-display font-bold tracking-widest uppercase rounded-lg border transition-colors cursor-pointer ${
+                    trainingStatus === s
+                      ? s === 'inactive'
+                        ? 'bg-yellow-500/15 border-yellow-500/40 text-yellow-400'
+                        : 'bg-green-500/15 border-green-500/40 text-green-400'
+                      : 'border-white/10 text-white/40 hover:border-white/20'
+                  }`}
+                >
+                  {s === 'active' ? 'Active' : 'Inactive'}
+                </button>
+              ))}
+            </div>
+
+            {/* Inactive-only fields */}
+            {trainingStatus === 'inactive' && (
+              <div className="space-y-3">
+                {/* Reason selector */}
+                <div>
+                  <label className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1.5">
+                    Reason
+                  </label>
+                  <select
+                    value={INACTIVE_REASONS.includes(inactiveReason) ? inactiveReason : (inactiveReason ? 'Other' : '')}
+                    onChange={e => setInactiveReason(e.target.value === 'Other' ? '' : e.target.value)}
+                    className="w-full bg-surface-light border border-white/10 rounded-lg px-3 py-2 text-white font-body text-sm focus:outline-none focus:border-white/30 cursor-pointer"
+                  >
+                    <option value="">Select reason...</option>
+                    {INACTIVE_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </div>
+
+                {/* Free-text override */}
+                <input
+                  type="text"
+                  value={inactiveReason}
+                  onChange={e => setInactiveReason(e.target.value)}
+                  placeholder="Or type a custom reason..."
+                  className="w-full bg-surface-light border border-white/10 rounded-lg px-3 py-2 text-white font-body text-sm placeholder:text-white/20 focus:outline-none focus:border-white/30"
+                />
+
+                {/* Expected return */}
+                <div>
+                  <label className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1.5">
+                    Expected Return Date
+                  </label>
+                  <input
+                    type="date"
+                    value={expectedReturn}
+                    onChange={e => setExpectedReturn(e.target.value)}
+                    className="w-full bg-surface-light border border-white/10 rounded-lg px-3 py-2 text-white font-body text-sm focus:outline-none focus:border-white/30"
+                  />
+                </div>
+
+                {/* Carry-over credit */}
+                <div className="border border-white/5 rounded-lg p-3 bg-surface-light/50">
+                  <p className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 mb-0.5">
+                    Carry-over Credit
+                  </p>
+                  <p className="text-white/30 text-xs font-body mb-3">
+                    Approve for emergencies only — not for uncommitment.
+                  </p>
+                  <div className="flex gap-2 mb-3">
+                    {[false, true].map(v => (
+                      <button
+                        key={String(v)}
+                        onClick={() => setPauseCreditApproved(v)}
+                        className={`flex-1 py-2 text-[11px] font-display font-bold tracking-widest uppercase rounded-lg border transition-colors cursor-pointer ${
+                          pauseCreditApproved === v
+                            ? v
+                              ? 'bg-yellow-500/15 border-yellow-500/40 text-yellow-400'
+                              : 'bg-white/5 border-white/20 text-white/60'
+                            : 'border-white/10 text-white/30 hover:border-white/20'
+                        }`}
+                      >
+                        {v ? 'Approved ✓' : 'No Credit'}
+                      </button>
+                    ))}
+                  </div>
+                  {pauseCreditApproved && (
+                    <div>
+                      <label className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1.5">
+                        Credit Days (unused days to carry forward)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="31"
+                        value={pauseCreditDays}
+                        onChange={e => setPauseCreditDays(Math.max(0, Math.min(31, parseInt(e.target.value) || 0)))}
+                        placeholder="e.g. 8"
+                        className="w-full bg-surface border border-white/10 rounded-lg px-3 py-2 text-white font-body text-sm focus:outline-none focus:border-white/30"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Save button */}
+            <button
+              onClick={saveTrainingStatus}
+              disabled={statusSaving}
+              className="w-full bg-accent text-white font-display font-bold text-sm tracking-wider uppercase py-3 rounded-full hover:bg-accent-dark transition-all cursor-pointer disabled:opacity-50"
+            >
+              {statusSaving ? 'Saving...' : 'Save Status'}
+            </button>
+            {statusResult && (
+              <p className={`text-xs font-body text-center ${statusResult.success ? 'text-green-400' : 'text-red-400'}`}>
+                {statusResult.message}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Inline result message (non-editor mode) */}
+        {!showStatusEditor && statusResult && (
+          <p className={`text-xs font-body mt-2 ${statusResult.success ? 'text-green-400' : 'text-red-400'}`}>
+            {statusResult.message}
+          </p>
+        )}
       </div>
 
       {/* ── TRAINING PROFILE ─────────────────────────────────── */}
@@ -1810,6 +2120,317 @@ function ImportPaymentsModal({ adminKey, onClose, onImported }) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// AttendanceView — monthly attendance grid
+// ─────────────────────────────────────────────────────────────
+
+const DAY_ABBR = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function getDaysInMonth(year, month) {
+  // Returns array of Date objects for every day in the given month (1-indexed)
+  const days = [];
+  const total = new Date(year, month, 0).getDate();
+  for (let d = 1; d <= total; d++) days.push(new Date(year, month - 1, d));
+  return days;
+}
+
+function AttendanceView({ adminKey }) {
+  const now = new Date();
+  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth() + 1); // 1-indexed
+  const [clients, setClients] = useState([]);
+  const [records, setRecords] = useState([]); // { id, client_id, session_date, attended }
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(new Set()); // "clientId_date" keys
+  const [filterStatus, setFilterStatus] = useState('active'); // 'all' | 'active' | 'inactive'
+  const [search, setSearch] = useState('');
+
+  const monthStr = `${year}-${String(month).padStart(2, '0')}`;
+
+  async function fetchAttendance(y, m) {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/attendance?month=${y}-${String(m).padStart(2, '0')}`, {
+        headers: { Authorization: `Bearer ${adminKey}` },
+      });
+      const data = await res.json();
+      setClients(data.clients || []);
+      setRecords(data.records || []);
+    } catch (e) {
+      console.error('AttendanceView fetch error', e);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { fetchAttendance(year, month); }, [year, month]);
+
+  // recordMap[clientId][sessionDate] = attended (bool)
+  const recordMap = {};
+  for (const r of records) {
+    if (!recordMap[r.client_id]) recordMap[r.client_id] = {};
+    recordMap[r.client_id][r.session_date] = r.attended;
+  }
+
+  async function toggleCell(clientId, dateStr) {
+    const key = `${clientId}_${dateStr}`;
+    if (saving.has(key)) return;
+    setSaving(prev => new Set(prev).add(key));
+
+    const current = recordMap[clientId]?.[dateStr];
+    // Cycle: undefined → true (present) → false (absent) → undefined (clear)
+    try {
+      if (current === undefined) {
+        // Mark present
+        const res = await fetch('/api/admin/attendance', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminKey}` },
+          body: JSON.stringify({ clientId, sessionDate: dateStr, attended: true }),
+        });
+        const data = await res.json();
+        if (data.record) {
+          setRecords(prev => [...prev.filter(r => !(r.client_id === clientId && r.session_date === dateStr)), data.record]);
+        }
+      } else if (current === true) {
+        // Mark absent
+        const res = await fetch('/api/admin/attendance', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminKey}` },
+          body: JSON.stringify({ clientId, sessionDate: dateStr, attended: false }),
+        });
+        const data = await res.json();
+        if (data.record) {
+          setRecords(prev => [...prev.filter(r => !(r.client_id === clientId && r.session_date === dateStr)), data.record]);
+        }
+      } else {
+        // Clear
+        await fetch('/api/admin/attendance', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminKey}` },
+          body: JSON.stringify({ clientId, sessionDate: dateStr }),
+        });
+        setRecords(prev => prev.filter(r => !(r.client_id === clientId && r.session_date === dateStr)));
+      }
+    } catch (e) {
+      console.error('toggleCell error', e);
+    } finally {
+      setSaving(prev => { const s = new Set(prev); s.delete(key); return s; });
+    }
+  }
+
+  async function markAllPresent(dateStr) {
+    const visibleClients = filteredClients;
+    for (const c of visibleClients) {
+      const current = recordMap[c.id]?.[dateStr];
+      if (current !== true) {
+        const key = `${c.id}_${dateStr}`;
+        setSaving(prev => new Set(prev).add(key));
+        try {
+          const res = await fetch('/api/admin/attendance', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminKey}` },
+            body: JSON.stringify({ clientId: c.id, sessionDate: dateStr, attended: true }),
+          });
+          const data = await res.json();
+          if (data.record) {
+            setRecords(prev => [...prev.filter(r => !(r.client_id === c.id && r.session_date === dateStr)), data.record]);
+          }
+        } catch (e) { console.error(e); }
+        finally { setSaving(prev => { const s = new Set(prev); s.delete(key); return s; }); }
+      }
+    }
+  }
+
+  function exportCSV() {
+    const days = getDaysInMonth(year, month);
+    const header = ['Client', 'Plan', ...days.map(d => `${d.getDate()} ${DAY_ABBR[d.getDay()]}`), 'Attended', 'Total Marked', '%'];
+    const rows = filteredClients.map(c => {
+      const cm = recordMap[c.id] || {};
+      const dayVals = days.map(d => {
+        const ds = d.toISOString().split('T')[0];
+        const v = cm[ds];
+        return v === true ? 'Y' : v === false ? 'N' : '';
+      });
+      const attended = dayVals.filter(v => v === 'Y').length;
+      const total = dayVals.filter(v => v !== '').length;
+      const pct = total > 0 ? Math.round(attended / total * 100) + '%' : '—';
+      return [c.full_name, c.selected_plan || '—', ...dayVals, attended, total, pct];
+    });
+    const csv = [header, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url;
+    a.download = `AMSC_Attendance_${MONTH_NAMES[month - 1]}_${year}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+  }
+
+  function prevMonth() {
+    if (month === 1) { setYear(y => y - 1); setMonth(12); }
+    else setMonth(m => m - 1);
+  }
+  function nextMonth() {
+    if (month === 12) { setYear(y => y + 1); setMonth(1); }
+    else setMonth(m => m + 1);
+  }
+
+  const days = getDaysInMonth(year, month);
+
+  const filteredClients = clients.filter(c => {
+    if (filterStatus === 'active' && c.training_status !== 'active') return false;
+    if (filterStatus === 'inactive' && c.training_status !== 'inactive') return false;
+    if (search && !c.full_name.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
+
+  // Overall stats
+  const totalSessions = records.filter(r => r.attended).length;
+  const totalMarked = records.length;
+  const overallPct = totalMarked > 0 ? Math.round(totalSessions / totalMarked * 100) : 0;
+  const belowFifty = filteredClients.filter(c => {
+    const cm = recordMap[c.id] || {};
+    const att = Object.values(cm).filter(v => v === true).length;
+    const tot = Object.values(cm).length;
+    return tot >= 3 && (att / tot) < 0.5;
+  }).length;
+
+  const thStyle = { padding: '6px 4px', textAlign: 'center', color: '#555', fontFamily: 'Oswald, sans-serif', fontSize: '11px', fontWeight: 700, letterSpacing: '0.05em', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: '#111' };
+  const nameThStyle = { ...thStyle, textAlign: 'left', padding: '6px 10px', minWidth: '140px', position: 'sticky', left: 0, background: '#111', zIndex: 2 };
+
+  return (
+    <div style={{ paddingTop: '8px' }}>
+      {/* ── Controls ── */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
+        {/* Month nav */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button onClick={prevMonth} style={{ background: '#1a1a1a', border: '1px solid #333', color: '#f5f5f8', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer', fontSize: '16px', lineHeight: 1 }}>‹</button>
+          <span style={{ fontFamily: 'Oswald, sans-serif', fontWeight: 700, fontSize: '18px', color: '#f5f5f8', letterSpacing: '0.06em', minWidth: '160px', textAlign: 'center' }}>
+            {MONTH_NAMES[month - 1].toUpperCase()} {year}
+          </span>
+          <button onClick={nextMonth} style={{ background: '#1a1a1a', border: '1px solid #333', color: '#f5f5f8', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer', fontSize: '16px', lineHeight: 1 }}>›</button>
+        </div>
+
+        {/* Filters */}
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search client…"
+            style={{ background: '#1a1a1a', border: '1px solid #333', color: '#f5f5f8', borderRadius: '6px', padding: '6px 10px', fontSize: '13px', width: '160px' }}
+          />
+          {[['active', 'Active'], ['inactive', 'Inactive'], ['all', 'All']].map(([key, label]) => (
+            <button key={key} onClick={() => setFilterStatus(key)} style={{ background: filterStatus === key ? '#a60a08' : '#1a1a1a', color: '#f5f5f8', border: '1px solid ' + (filterStatus === key ? '#a60a08' : '#333'), borderRadius: '6px', padding: '5px 12px', fontSize: '12px', fontWeight: 700, fontFamily: 'Oswald, sans-serif', letterSpacing: '0.05em', cursor: 'pointer' }}>{label}</button>
+          ))}
+          <button onClick={exportCSV} style={{ background: '#1a1a1a', color: '#f5f5f8', border: '1px solid #333', borderRadius: '6px', padding: '5px 12px', fontSize: '12px', fontWeight: 700, fontFamily: 'Oswald, sans-serif', letterSpacing: '0.05em', cursor: 'pointer' }}>↓ CSV</button>
+        </div>
+      </div>
+
+      {/* ── KPI strip ── */}
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+        {[
+          ['Sessions Recorded', totalSessions],
+          ['Total Marks', totalMarked],
+          ['Avg Attendance', `${overallPct}%`],
+          ['Clients Shown', filteredClients.length],
+          ['Below 50%', belowFifty],
+        ].map(([label, val]) => (
+          <div key={label} style={{ background: '#1a1a1a', border: '1px solid #222', borderRadius: '8px', padding: '10px 16px', minWidth: '100px' }}>
+            <div style={{ color: '#555', fontSize: '10px', fontFamily: 'Oswald, sans-serif', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '4px' }}>{label}</div>
+            <div style={{ color: label === 'Below 50%' && belowFifty > 0 ? '#f87171' : '#f5f5f8', fontSize: '20px', fontWeight: 700, fontFamily: 'Oswald, sans-serif' }}>{val}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Legend ── */}
+      <div style={{ display: 'flex', gap: '16px', marginBottom: '12px', fontSize: '11px', color: '#555', alignItems: 'center' }}>
+        <span style={{ color: '#555', fontFamily: 'Oswald, sans-serif', fontWeight: 700, letterSpacing: '0.06em', fontSize: '11px', textTransform: 'uppercase' }}>Click to cycle:</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><span style={{ width: 18, height: 18, background: '#1a1a1a', border: '1px solid #333', borderRadius: 3, display: 'inline-block' }} /> Empty</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><span style={{ width: 18, height: 18, background: '#14532d', border: '1px solid #166534', borderRadius: 3, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#4ade80' }}>✓</span> Present</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><span style={{ width: 18, height: 18, background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 3, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#f87171' }}>✗</span> Absent</span>
+      </div>
+
+      {loading ? (
+        <div style={{ color: '#555', textAlign: 'center', padding: '40px 0', fontFamily: 'Oswald, sans-serif', letterSpacing: '0.08em' }}>LOADING…</div>
+      ) : (
+        <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid #222' }}>
+          <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '12px' }}>
+            <thead>
+              <tr>
+                <th style={nameThStyle}>Client</th>
+                {days.map(d => {
+                  const isSun = d.getDay() === 0;
+                  const isSat = d.getDay() === 6;
+                  const isWeekend = isSun || isSat;
+                  const ds = d.toISOString().split('T')[0];
+                  const isToday = ds === new Date().toISOString().split('T')[0];
+                  return (
+                    <th key={ds} style={{ ...thStyle, background: isWeekend ? '#0d0d0d' : '#111', color: isToday ? '#a60a08' : isWeekend ? '#444' : '#555', minWidth: '28px', width: '28px', cursor: 'pointer', position: 'relative' }}
+                      title={`Mark all present — ${ds}`}
+                      onClick={() => markAllPresent(ds)}
+                    >
+                      <div>{d.getDate()}</div>
+                      <div style={{ fontSize: '9px', marginTop: '1px' }}>{DAY_ABBR[d.getDay()]}</div>
+                    </th>
+                  );
+                })}
+                <th style={{ ...thStyle, minWidth: '40px' }}>YS</th>
+                <th style={{ ...thStyle, minWidth: '40px' }}>NO</th>
+                <th style={{ ...thStyle, minWidth: '44px' }}>%</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredClients.length === 0 && (
+                <tr><td colSpan={days.length + 4} style={{ textAlign: 'center', padding: '32px', color: '#555' }}>No clients found</td></tr>
+              )}
+              {filteredClients.map((c, idx) => {
+                const cm = recordMap[c.id] || {};
+                const attended = Object.values(cm).filter(v => v === true).length;
+                const absent = Object.values(cm).filter(v => v === false).length;
+                const total = Object.values(cm).length;
+                const pct = total > 0 ? Math.round(attended / total * 100) : null;
+                const isInactive = c.training_status === 'inactive';
+                return (
+                  <tr key={c.id} style={{ borderTop: '1px solid #1a1a1a', background: idx % 2 === 0 ? 'transparent' : '#0a0a0a' }}>
+                    <td style={{ padding: '4px 10px', color: isInactive ? '#555' : '#f5f5f8', fontWeight: 600, whiteSpace: 'nowrap', position: 'sticky', left: 0, background: idx % 2 === 0 ? '#0d0d0d' : '#0a0a0a', zIndex: 1, maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {c.full_name}
+                      {isInactive && <span style={{ marginLeft: 6, fontSize: 9, color: '#555', fontFamily: 'Oswald, sans-serif', letterSpacing: '0.05em', textTransform: 'uppercase' }}>paused</span>}
+                    </td>
+                    {days.map(d => {
+                      const ds = d.toISOString().split('T')[0];
+                      const val = cm[ds];
+                      const isSaving = saving.has(`${c.id}_${ds}`);
+                      const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                      let bg = isWeekend ? '#111' : 'transparent';
+                      let content = '';
+                      let color = 'transparent';
+                      if (val === true)  { bg = '#14532d'; content = '✓'; color = '#4ade80'; }
+                      if (val === false) { bg = '#450a0a'; content = '✗'; color = '#f87171'; }
+                      return (
+                        <td key={ds}
+                          onClick={() => !isSaving && toggleCell(c.id, ds)}
+                          style={{ width: 28, minWidth: 28, height: 28, textAlign: 'center', verticalAlign: 'middle', background: bg, cursor: isSaving ? 'wait' : 'pointer', border: '1px solid #1a1a1a', color, fontSize: 12, fontWeight: 700, opacity: isSaving ? 0.5 : 1, transition: 'background 0.1s' }}
+                          title={`${c.full_name} — ${ds}`}
+                        >
+                          {content}
+                        </td>
+                      );
+                    })}
+                    <td style={{ textAlign: 'center', padding: '4px 6px', color: '#4ade80', fontWeight: 700 }}>{attended || '—'}</td>
+                    <td style={{ textAlign: 'center', padding: '4px 6px', color: absent > 0 ? '#f87171' : '#555', fontWeight: 700 }}>{absent || '—'}</td>
+                    <td style={{ textAlign: 'center', padding: '4px 6px', color: pct === null ? '#555' : pct < 50 ? '#f87171' : pct < 75 ? '#fbbf24' : '#4ade80', fontWeight: 700 }}>
+                      {pct !== null ? `${pct}%` : '—'}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // ArrearsView — clients with outstanding balances
 // ─────────────────────────────────────────────────────────────
 
@@ -2328,6 +2949,7 @@ export default function AdminPage() {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState('pending_review');
+  const [trainingFilter, setTrainingFilter] = useState('all');
   const [activeSection, setActiveSection] = useState('applications');
   const [activeTab, setActiveTab] = useState('applications');
   const [selectedClient, setSelectedClient] = useState(null);
@@ -2437,6 +3059,18 @@ export default function AdminPage() {
     { value: 'all', label: 'All' },
   ];
 
+  const trainingFilterOptions = [
+    { value: 'all', label: 'All Training' },
+    { value: 'active', label: 'Active' },
+    { value: 'inactive', label: 'Paused' },
+  ];
+
+  // Apply training status filter on top of the status-filtered client list
+  const visibleClients = clients.filter(c =>
+    trainingFilter === 'all' ||
+    (c.training_status || 'active') === trainingFilter
+  );
+
   return (
     <section className="py-8 px-4 sm:px-6 bg-background min-h-screen pt-20">
       <div className="max-w-3xl mx-auto">
@@ -2480,7 +3114,7 @@ export default function AdminPage() {
             {/* Top-level tab switcher: Applications | Revenue */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '20px', borderBottom: '1px solid #222', paddingBottom: '0' }}>
               <div style={{ display: 'flex', gap: '4px' }}>
-                {[['applications', 'Applications'], ['revenue', 'Revenue'], ['arrears', 'Arrears']].map(([key, label]) => (
+                {[['applications', 'Applications'], ['revenue', 'Revenue'], ['arrears', 'Arrears'], ['attendance', 'Attendance']].map(([key, label]) => (
                   <button
                     key={key}
                     onClick={() => setActiveTab(key)}
@@ -2522,6 +3156,11 @@ export default function AdminPage() {
               <ArrearsView adminKey={adminKey} />
             )}
 
+            {/* Attendance tab */}
+            {activeTab === 'attendance' && (
+              <AttendanceView adminKey={adminKey} />
+            )}
+
             {/* Applications tab */}
             {activeTab === 'applications' && (
               <>
@@ -2552,11 +3191,32 @@ export default function AdminPage() {
                   {filterOptions.map((opt) => (
                     <button
                       key={opt.value}
-                      onClick={() => setFilter(opt.value)}
+                      onClick={() => { setFilter(opt.value); setTrainingFilter('all'); }}
                       className={`px-4 py-2 rounded-full font-display text-xs font-bold tracking-wider uppercase transition-all cursor-pointer whitespace-nowrap ${
                         filter === opt.value
                           ? 'bg-accent text-white'
                           : 'bg-surface-light text-secondary border border-white/5 hover:border-white/20'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Training status filter pills */}
+                <div className="flex gap-2 flex-wrap mb-6">
+                  {trainingFilterOptions.map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setTrainingFilter(opt.value)}
+                      className={`px-3 py-1.5 rounded-full font-display text-[10px] font-bold tracking-wider uppercase transition-all cursor-pointer whitespace-nowrap ${
+                        trainingFilter === opt.value
+                          ? opt.value === 'inactive'
+                            ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+                            : opt.value === 'active'
+                            ? 'bg-green-500/15 text-green-400 border border-green-500/25'
+                            : 'bg-white/10 text-white border border-white/20'
+                          : 'bg-transparent text-white/30 border border-white/5 hover:border-white/15 hover:text-white/50'
                       }`}
                     >
                       {opt.label}
@@ -2569,14 +3229,14 @@ export default function AdminPage() {
                     <span className="inline-block w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin mb-4" />
                     <p className="text-secondary font-body text-sm">Loading applications...</p>
                   </div>
-                ) : clients.length === 0 ? (
+                ) : visibleClients.length === 0 ? (
                   <div className="text-center py-12 bg-surface border border-white/5 rounded-xl">
                     <p className="text-secondary font-body text-sm">
-                      No {filter === 'all' ? '' : filter.replace('_', ' ')} applications found.
+                      No {trainingFilter !== 'all' ? `${trainingFilter} ` : ''}{filter === 'all' ? '' : filter.replace('_', ' ')} clients found.
                     </p>
                   </div>
                 ) : (
-                  clients.map((client) => (
+                  visibleClients.map((client) => (
                     <ApplicationCard
                       key={client.id}
                       client={client}
