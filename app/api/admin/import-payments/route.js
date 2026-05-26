@@ -103,7 +103,7 @@ export async function POST(request) {
     // Build a name → client map (lowercase key for case-insensitive matching)
     const { data: existingClients } = await supabase
       .from('clients')
-      .select('id, full_name, selected_plan, plan_price');
+      .select('id, full_name, selected_plan, plan_price, last_paid_at, approval_token');
 
     const clientMap = new Map();
     for (const c of existingClients || []) {
@@ -210,13 +210,20 @@ export async function POST(request) {
           continue;
         }
 
-        // Update client's last_paid_at if this payment is more recent
+        // Update client's last_paid_at if this payment is more recent.
+        // IMPORTANT: never overwrite payment_status for clients who have an
+        // approval_token set — those are pending Paystack payers who must pay
+        // through the website. Marking them 'paid' via import would block their
+        // payment link. Only set 'paid' for historical/walk-in members.
         if (!client.last_paid_at || new Date(parsedDate) > new Date(client.last_paid_at)) {
+          const updatePayload = { last_paid_at: parsedDate };
+          if (!client.approval_token) {
+            updatePayload.payment_status = 'paid';
+          }
           await supabase
             .from('clients')
-            .update({ last_paid_at: parsedDate, payment_status: 'paid' })
+            .update(updatePayload)
             .eq('id', client.id);
-          // Update local map entry
           client.last_paid_at = parsedDate;
         }
 
