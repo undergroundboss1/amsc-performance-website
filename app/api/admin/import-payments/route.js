@@ -171,7 +171,23 @@ export async function POST(request) {
         }
       }
 
-      // Insert payment
+      // Insert payment — use a deterministic reference so re-running the same
+      // CSV is idempotent. If the exact same record already exists we skip it.
+      const importRef = `import_${client.id}_${parsedDate}_${Number(row.amount)}`;
+
+      // Check for existing record with the same reference (safe re-import)
+      const { data: existing } = await supabase
+        .from('payments')
+        .select('id')
+        .eq('payment_reference', importRef)
+        .maybeSingle();
+
+      if (existing) {
+        // Already imported — skip silently (count as imported to avoid confusion)
+        imported++;
+        continue;
+      }
+
       try {
         const { error: paymentError } = await supabase
           .from('payments')
@@ -181,7 +197,7 @@ export async function POST(request) {
             currency: 'KES',
             payment_date: parsedDate,
             payment_method: 'manual_cash',
-            payment_reference: null,
+            payment_reference: importRef,
             plan_id: client.selected_plan,
             plan_price: client.plan_price,
             months_covered: 1,
