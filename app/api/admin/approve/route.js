@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { getSupabase } from '../../../../lib/supabase';
 import { getPlanById } from '../../../../lib/plans';
+import { sendEmail, buildApprovalEmail } from '../../../../lib/email';
 
 /**
  * POST /api/admin/approve
@@ -63,16 +64,31 @@ export async function POST(request) {
     }
 
     if (client.application_status === 'approved' && client.approval_token) {
-      // Already approved — return existing payment link
+      // Already approved — resend the email with the existing payment link
       const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://amsc-performance.vercel.app';
       const plan = getPlanById(client.selected_plan);
+      const planName = plan?.name || client.selected_plan;
+      const planPrice = plan?.displayPrice || `KES ${client.plan_price?.toLocaleString()}`;
+      const paymentUrl = `${siteUrl}/join/pay?token=${client.approval_token}`;
+
+      let emailSent = false;
+      if (client.email) {
+        const { ok } = await sendEmail({
+          to: client.email,
+          subject: "Your AMSC payment link",
+          html: buildApprovalEmail({ fullName: client.full_name, planName, planPrice, paymentUrl }),
+        });
+        emailSent = ok;
+      }
+
       return NextResponse.json({
-        message: 'Client was already approved.',
-        paymentUrl: `${siteUrl}/join/pay?token=${client.approval_token}`,
+        message: 'Client was already approved. Payment link resent.',
+        paymentUrl,
+        emailSent,
         client: {
           name: client.full_name,
           email: client.email,
-          plan: plan?.name || client.selected_plan,
+          plan: planName,
         },
       });
     }
@@ -100,16 +116,38 @@ export async function POST(request) {
 
     const paymentUrl = `${siteUrl}/join/pay?token=${approvalToken}`;
     const plan = getPlanById(client.selected_plan);
+    const planName = plan?.name || client.selected_plan;
+    const planPrice = plan?.displayPrice || `KES ${client.plan_price?.toLocaleString()}`;
+
+    // Send approval email automatically via Resend
+    let emailSent = false;
+    if (client.email) {
+      const { ok, error: emailError } = await sendEmail({
+        to: client.email,
+        subject: "You're approved — complete your AMSC payment",
+        html: buildApprovalEmail({
+          fullName: client.full_name,
+          planName,
+          planPrice,
+          paymentUrl,
+        }),
+      });
+      emailSent = ok;
+      if (!ok) {
+        console.error('Approval email failed:', emailError);
+      }
+    }
 
     return NextResponse.json({
       message: 'Client approved successfully.',
       paymentUrl,
+      emailSent,
       client: {
         name: client.full_name,
         email: client.email,
         phone: client.phone,
-        plan: plan?.name || client.selected_plan,
-        price: plan?.displayPrice || `KES ${client.plan_price}`,
+        plan: planName,
+        price: planPrice,
       },
     });
   } catch (err) {
