@@ -55,8 +55,9 @@ export async function POST(request) {
     const reference = `AMSC-${Date.now()}-${clientId.slice(0, 8)}`;
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://amscperformance.com';
 
-    // Paystack amount is in kobo (KES cents) — multiply by 100
-    const amountInKobo = plan.price * 100;
+    // Always charge client.plan_price — this reflects any custom or discounted
+    // rate set by the admin, rather than the standard plan price.
+    const amountInKobo = client.plan_price * 100;
 
     // Initialize Paystack transaction with plan code.
     // Including `plan` causes Paystack to automatically create a recurring

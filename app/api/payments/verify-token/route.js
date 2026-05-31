@@ -46,11 +46,13 @@ export async function GET(request) {
 
     const plan = getPlanById(client.selected_plan);
 
+    // Always use client.plan_price as the source of truth — it reflects any
+    // custom or discounted rate the admin has set, rather than the standard plan price.
     return NextResponse.json({
       clientId: client.id,
       name: client.full_name.split(' ')[0], // Only first name for privacy
       planName: plan?.name || client.selected_plan,
-      displayPrice: plan?.displayPrice || `KES ${client.plan_price.toLocaleString()}`,
+      displayPrice: `KES ${client.plan_price.toLocaleString()}`,
       paymentStatus: client.payment_status,
     });
   } catch (err) {
