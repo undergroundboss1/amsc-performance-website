@@ -62,6 +62,7 @@ export async function POST(request) {
       const updateFields = {
         payment_status: 'paid',
         last_paid_at: paidAt,
+        reminders_sent: {}, // reset so next billing cycle gets fresh reminders
         notes: `Paystack charge confirmed. Amount: ${amountKes} ${data.currency}. Channel: ${data.channel}. Paid at: ${paidAt}`,
       };
 

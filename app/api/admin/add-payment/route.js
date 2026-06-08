@@ -106,11 +106,11 @@ export async function POST(request) {
       !client.last_paid_at || parsedDate > new Date(client.last_paid_at);
 
     if (shouldUpdateLastPaid) {
-      const clientUpdate = {
+      await supabase.from('clients').update({
         last_paid_at: parsedDate.toISOString(),
         payment_status: 'paid',
-      };
-      await supabase.from('clients').update(clientUpdate).eq('id', clientId);
+        reminders_sent: {}, // reset so next billing cycle gets fresh reminders
+      }).eq('id', clientId);
     }
 
     console.log(

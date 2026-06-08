@@ -1,92 +1,139 @@
 import { NextResponse } from 'next/server';
 import { getSupabase } from '../../../../lib/supabase';
-import { getPlanById } from '../../../../lib/plans';
+import { trainingPlans } from '../../../../lib/plans';
 import { sendEmail, buildPaymentReminderEmail } from '../../../../lib/email';
 
 /**
  * GET /api/cron/payment-reminders
  *
- * Called daily by Vercel Cron. Finds M-Pesa clients whose payment is
- * due again (30+ days since last_paid_at) and sends them a renewal reminder.
+ * Called daily by Vercel Cron (08:00 UTC = 11:00 Nairobi).
+ * Sends payment reminders at three stages of the billing cycle:
+ *   5d  — 5 days before due
+ *   1d  — 1 day before due
+ *   0d  — on the due date
  *
- * A reminder is only sent once per billing cycle — it won't re-fire until
- * the client pays and resets last_paid_at.
+ * Due date = last_paid_at + 30 days.
  *
- * Required env vars:
- *   CRON_SECRET       — shared secret Vercel sends in Authorization header
- *   RESEND_API_KEY    — Resend API key for sending emails
- *   NEXT_PUBLIC_SITE_URL — used to build the payment link
+ * Active clients = last_paid_at set + training_status = 'active'.
+ * Applies to all members (Paystack and in-person cash clients alike).
+ * Cash clients get no payment link — email tells them to pay in person.
+ *
+ * Idempotency: reminders_sent JSONB column tracks which stages have
+ * been sent for the current billing cycle:
+ *   { "5d": "2026-06-03", "1d": "2026-06-07", "0d": "2026-06-08" }
+ * Cleared automatically when a new payment is recorded (see add-payment
+ * and paystack webhook routes).
+ *
+ * Placeholder emails (@amscperformance.placeholder) are skipped.
  */
+
+const STAGES = ['5d', '1d', '0d'];
+
+// Days before due date each stage fires
+const STAGE_DAYS = { '5d': 5, '1d': 1, '0d': 0 };
+
 export async function GET(request) {
-  // Verify this is a legitimate Vercel Cron call
   const authHeader = request.headers.get('authorization');
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const supabase = getSupabase();
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://amscperformance.com';
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
 
-  // Find M-Pesa clients who are paid but 30+ days have elapsed since last payment
-  // and haven't been reminded yet this cycle
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-
+  // Fetch all active members (have paid at least once, not paused, real email)
   const { data: clients, error } = await supabase
     .from('clients')
-    .select('id, full_name, email, phone, selected_plan, approval_token, last_paid_at, payment_reminder_sent_at')
-    .eq('payment_provider', 'paystack_mpesa')
-    .eq('payment_status', 'paid')
-    .lt('last_paid_at', thirtyDaysAgo)
-    .or(`payment_reminder_sent_at.is.null,payment_reminder_sent_at.lt.last_paid_at`);
+    .select('id, full_name, email, selected_plan, plan_price, approval_token, last_paid_at, reminders_sent, training_status')
+    .eq('application_status', 'approved')
+    .eq('training_status', 'active')
+    .not('last_paid_at', 'is', null);
 
   if (error) {
-    console.error('Payment reminders: DB query error:', error);
+    console.error('Payment reminders: DB error:', error);
     return NextResponse.json({ error: 'Database error' }, { status: 500 });
   }
 
   if (!clients || clients.length === 0) {
-    return NextResponse.json({ message: 'No reminders due', sent: 0 });
+    return NextResponse.json({ message: 'No active clients found', sent: 0 });
   }
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://amscperformance.com';
-  const results = { sent: 0, failed: 0, clients: [] };
+  const results = { sent: 0, skipped: 0, failed: 0, detail: [] };
 
   for (const client of clients) {
-    const plan = getPlanById(client.selected_plan);
-    const paymentUrl = `${siteUrl}/join/pay?token=${client.approval_token}`;
+    // Skip placeholder emails (historical imports without real contact)
+    if (client.email?.endsWith('.placeholder')) {
+      results.skipped++;
+      continue;
+    }
+
+    // Calculate due date and days remaining
+    const lastPaid = new Date(client.last_paid_at);
+    const dueDate = new Date(lastPaid);
+    dueDate.setDate(dueDate.getDate() + 30);
+    dueDate.setHours(0, 0, 0, 0);
+
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const daysUntilDue = Math.round((dueDate.getTime() - today.getTime()) / msPerDay);
+
+    // Determine which stage fires today
+    const stage = STAGES.find(s => STAGE_DAYS[s] === daysUntilDue);
+    if (!stage) {
+      // Not a reminder day for this client
+      continue;
+    }
+
+    // Check if this stage was already sent for the current billing cycle
+    const sent = client.reminders_sent || {};
+    if (sent[stage]) {
+      results.skipped++;
+      results.detail.push({ name: client.full_name, stage, status: 'already_sent' });
+      continue;
+    }
+
+    // Build email
+    const plan = trainingPlans.find(p => p.id === client.selected_plan);
     const planName = plan?.name || client.selected_plan;
-    const planPrice = plan?.displayPrice || 'KES —';
+    const planPrice = `KES ${(client.plan_price || plan?.price || 0).toLocaleString()}`;
+
+    // Only Paystack clients have an approval_token payment link
+    const paymentUrl = client.approval_token
+      ? `${siteUrl}/join/pay?token=${client.approval_token}`
+      : null;
+
+    const subjects = {
+      '5d': `Payment due in 5 days — ${planPrice}`,
+      '1d': `Payment due tomorrow — ${planPrice}`,
+      '0d': `Payment due today — ${planPrice}`,
+    };
 
     try {
-      const result = await sendEmail({
+      const { ok, error: emailError } = await sendEmail({
         to: client.email,
-        subject: `Your AMSC subscription payment is due — ${planPrice}`,
-        html: buildPaymentReminderEmail({
-          fullName: client.full_name,
-          planName,
-          planPrice,
-          paymentUrl,
-        }),
+        subject: subjects[stage],
+        html: buildPaymentReminderEmail({ fullName: client.full_name, planName, planPrice, paymentUrl, stage }),
       });
 
-      if (!result.ok) {
-        throw new Error(result.error);
-      }
+      if (!ok) throw new Error(emailError);
 
-      // Mark reminder sent
+      // Mark this stage sent in reminders_sent
       await supabase
         .from('clients')
-        .update({ payment_reminder_sent_at: new Date().toISOString() })
+        .update({ reminders_sent: { ...sent, [stage]: todayStr } })
         .eq('id', client.id);
 
       results.sent++;
-      results.clients.push({ name: client.full_name, email: client.email, status: 'sent' });
+      results.detail.push({ name: client.full_name, stage, status: 'sent', daysUntilDue });
     } catch (err) {
-      console.error(`Payment reminder failed for ${client.email}:`, err);
+      console.error(`Reminder failed for ${client.email} (${stage}):`, err.message);
       results.failed++;
-      results.clients.push({ name: client.full_name, email: client.email, status: 'failed', error: err.message });
+      results.detail.push({ name: client.full_name, stage, status: 'failed', error: err.message });
     }
   }
 
-  console.log(`Payment reminders: ${results.sent} sent, ${results.failed} failed`);
-  return NextResponse.json(results);
+  console.log(`Payment reminders: ${results.sent} sent, ${results.skipped} skipped, ${results.failed} failed`);
+  return NextResponse.json({ ...results, detail: results.detail });
 }
