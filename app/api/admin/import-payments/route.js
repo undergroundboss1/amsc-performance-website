@@ -143,10 +143,18 @@ export async function POST(request) {
         const plan = trainingPlans.find(p => p.id === planId) || trainingPlans.find(p => p.id === 'group');
 
         try {
+          // Generate a placeholder email for historical members who don't have
+          // one on record. Uses a deterministic slug so re-runs don't create duplicates.
+          const emailSlug = String(row.clientName).trim().toLowerCase()
+            .replace(/[^a-z0-9]+/g, '.')
+            .replace(/^\.+|\.+$/g, '');
+          const placeholderEmail = `${emailSlug}.import@amscperformance.placeholder`;
+
           const { data: newClient, error: createError } = await supabase
             .from('clients')
             .insert({
               full_name: String(row.clientName).trim(),
+              email: placeholderEmail,
               selected_plan: plan.id,
               plan_price: plan.price,
               application_status: 'approved',
