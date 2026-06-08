@@ -52,10 +52,11 @@ export async function GET(request) {
   try {
     const supabase = getSupabase();
 
-    // Active (and recently inactive) clients — include all so admin can see history
+    // All approved clients — last_paid_at drives the 'active' filter in the UI
+    // (last_paid_at set = real member; null = approved but never paid)
     const { data: clients, error: clientErr } = await supabase
       .from('clients')
-      .select('id, full_name, selected_plan, training_status')
+      .select('id, full_name, selected_plan, training_status, last_paid_at')
       .eq('application_status', 'approved')
       .order('full_name', { ascending: true });
 

@@ -2282,7 +2282,10 @@ function AttendanceView({ adminKey }) {
   const days = getDaysInMonth(year, month);
 
   const filteredClients = clients.filter(c => {
-    if (filterStatus === 'active' && c.training_status !== 'active') return false;
+    // 'active' = has paid at least once (last_paid_at set) and not paused
+    // — includes members who are late; excludes applicants who never paid
+    if (filterStatus === 'active' && (!c.last_paid_at || c.training_status === 'inactive')) return false;
+    // 'inactive' = explicitly paused by admin
     if (filterStatus === 'inactive' && c.training_status !== 'inactive') return false;
     if (search && !c.full_name.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
@@ -3072,10 +3075,14 @@ export default function AdminPage() {
   ];
 
   // Apply training status filter on top of the status-filtered client list
-  const visibleClients = clients.filter(c =>
-    trainingFilter === 'all' ||
-    (c.training_status || 'active') === trainingFilter
-  );
+  // 'active' = has ever paid (last_paid_at set) + not paused — real members on the floor
+  // An active member can be late on payments; an unapid applicant is not a member yet
+  const visibleClients = clients.filter(c => {
+    if (trainingFilter === 'all') return true;
+    if (trainingFilter === 'active') return !!c.last_paid_at && (c.training_status || 'active') !== 'inactive';
+    if (trainingFilter === 'inactive') return (c.training_status || 'active') === 'inactive';
+    return true;
+  });
 
   return (
     <section className="py-8 px-4 sm:px-6 bg-background min-h-screen pt-20">
