@@ -376,21 +376,27 @@ function ApplicationCard({ client, adminKey, onUpdate, onClick }) {
 
   const planName = trainingPlans.find(p => p.id === client.selected_plan)?.name || client.selected_plan;
 
+  const isInactive = client.training_status === 'inactive';
+
   return (
     <div
-      className="bg-surface border border-white/5 rounded-xl p-6 mb-4 cursor-pointer hover:border-white/15 transition-colors group"
+      className={`bg-surface rounded-xl p-6 mb-4 cursor-pointer transition-colors group ${
+        isInactive
+          ? 'border border-yellow-500/20 opacity-60 hover:opacity-80 hover:border-yellow-500/40'
+          : 'border border-white/5 hover:border-white/15'
+      }`}
       onClick={onClick}
     >
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
         <div>
-          <h3 className="font-display font-bold text-lg text-white group-hover:text-accent transition-colors">
+          <h3 className={`font-display font-bold text-lg transition-colors ${isInactive ? 'text-white/60 group-hover:text-white/80' : 'text-white group-hover:text-accent'}`}>
             {client.full_name}
           </h3>
           <p className="text-secondary text-sm font-body">{client.email} &middot; {client.phone}</p>
-          {client.training_status === 'inactive' && client.inactive_reason && (
+          {isInactive && (
             <p className="text-yellow-400/70 text-xs font-body mt-1">
-              Paused — {client.inactive_reason}
+              Paused{client.inactive_reason ? ` — ${client.inactive_reason}` : ''}
               {client.expected_return_date
                 ? ` · Returns ${formatDate(new Date(client.expected_return_date))}`
                 : ''}
@@ -2949,7 +2955,7 @@ export default function AdminPage() {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState('pending_review');
-  const [trainingFilter, setTrainingFilter] = useState('all');
+  const [trainingFilter, setTrainingFilter] = useState('active');
   const [activeSection, setActiveSection] = useState('applications');
   const [activeTab, setActiveTab] = useState('applications');
   const [selectedClient, setSelectedClient] = useState(null);
@@ -3191,7 +3197,7 @@ export default function AdminPage() {
                   {filterOptions.map((opt) => (
                     <button
                       key={opt.value}
-                      onClick={() => { setFilter(opt.value); setTrainingFilter('all'); }}
+                      onClick={() => { setFilter(opt.value); setTrainingFilter(opt.value === 'approved' ? 'active' : 'all'); }}
                       className={`px-4 py-2 rounded-full font-display text-xs font-bold tracking-wider uppercase transition-all cursor-pointer whitespace-nowrap ${
                         filter === opt.value
                           ? 'bg-accent text-white'
