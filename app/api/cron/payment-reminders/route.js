@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabase } from '../../../../lib/supabase';
 import { trainingPlans } from '../../../../lib/plans';
-import { sendEmail, buildPaymentReminderEmail } from '../../../../lib/email';
+import { sendEmail, buildPaymentReminderEmail, buildAdminPaymentAlertEmail } from '../../../../lib/email';
 
 /**
  * GET /api/cron/payment-reminders
@@ -132,6 +132,26 @@ export async function GET(request) {
       results.failed++;
       results.detail.push({ name: client.full_name, stage, status: 'failed', error: err.message });
     }
+  }
+
+  // ── Admin alert: send a digest when any clients hit 0d (due today) ──────────
+  const dueToday = results.detail.filter(d => d.stage === '0d' && d.status === 'sent');
+  if (dueToday.length > 0) {
+    const dueClients = dueToday.map(d => {
+      const client = clients.find(c => c.full_name === d.name);
+      const plan = trainingPlans.find(p => p.id === client?.selected_plan);
+      return {
+        name: d.name,
+        plan: plan?.name || client?.selected_plan || '—',
+        amount: `KES ${(client?.plan_price || 0).toLocaleString()}`,
+      };
+    });
+    const dateStr = new Date().toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
+    await sendEmail({
+      to: 'admin@amscperformance.com',
+      subject: `${dueToday.length} payment${dueToday.length !== 1 ? 's' : ''} due today — ${dateStr}`,
+      html: buildAdminPaymentAlertEmail({ dueClients, dateStr }),
+    });
   }
 
   console.log(`Payment reminders: ${results.sent} sent, ${results.skipped} skipped, ${results.failed} failed`);

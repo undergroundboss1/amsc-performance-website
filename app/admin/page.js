@@ -117,7 +117,9 @@ function PaymentTimingBar({ client, detailed = false }) {
   }
 
   if (!timing && !isOverdue) return null;
-  if (client.payment_status === 'pending' || client.payment_status === 'cancelled') return null;
+  if (client.payment_status === 'cancelled') return null;
+  // 'pending' with no last_paid_at = unapproved applicant, nothing to show
+  if (client.payment_status === 'pending' && !client.last_paid_at) return null;
 
   let dueLabelColor = 'text-white/40';
   let dueValue = null;
@@ -287,12 +289,19 @@ const paymentStatusColors = {
 
 function StatusBadges({ client }) {
   const payColor = paymentStatusColors[client.payment_status];
+  const timing = getPaymentTiming(client);
+  const isOverdue = timing && timing.daysOverdue > 0 && client.training_status !== 'inactive';
+
   return (
     <div className="flex items-center gap-2 flex-wrap">
       <span className={`text-[10px] font-display font-bold tracking-widest uppercase px-3 py-1 rounded-full border ${appStatusColors[client.application_status] || appStatusColors.pending_review}`}>
         {client.application_status?.replace('_', ' ')}
       </span>
-      {payColor && (
+      {isOverdue ? (
+        <span className="text-[10px] font-display font-bold tracking-widest uppercase px-3 py-1 rounded-full border bg-red-500/15 text-red-400 border-red-500/30">
+          OVERDUE
+        </span>
+      ) : payColor && (
         <span className={`text-[10px] font-display font-bold tracking-widest uppercase px-3 py-1 rounded-full border ${payColor}`}>
           {client.payment_status}
         </span>
