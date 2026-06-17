@@ -121,8 +121,8 @@ function PaymentContent() {
     );
   }
 
-  // Already paid
-  if (clientData.paymentStatus === 'paid') {
+  // Paid for the current cycle — nothing due right now.
+  if (!clientData.payable) {
     return (
       <section className="py-12 px-6 bg-background min-h-[80vh] pt-24 pb-20">
         <div className="max-w-md mx-auto text-center">
@@ -135,7 +135,7 @@ function PaymentContent() {
             ALREADY PAID
           </h1>
           <p className="text-secondary font-body text-sm mb-8">
-            This subscription has already been paid. If you need help, reach out to us on Instagram.
+            You&apos;re paid up for this cycle — there&apos;s nothing due right now. We&apos;ll remind you by email when your next payment is due. If you need help, reach out to us on Instagram.
           </p>
           <Link
             href="/"

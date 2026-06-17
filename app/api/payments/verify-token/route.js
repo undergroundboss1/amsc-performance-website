@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabase } from '../../../../lib/supabase';
 import { getPlanById } from '../../../../lib/plans';
+import { isDueNow } from '../../../../lib/billing';
 
 /**
  * GET /api/payments/verify-token?token=xxx
@@ -26,7 +27,7 @@ export async function GET(request) {
 
     const { data: client, error } = await supabase
       .from('clients')
-      .select('id, full_name, selected_plan, plan_price, payment_status, application_status')
+      .select('id, full_name, selected_plan, plan_price, payment_status, application_status, last_paid_at, training_start_date, training_status, pause_credit_days, payment_provider')
       .eq('approval_token', token)
       .single();
 
@@ -46,6 +47,10 @@ export async function GET(request) {
 
     const plan = getPlanById(client.selected_plan);
 
+    // payable = they have never paid, or their current billing cycle has elapsed.
+    // Cancelled subscriptions are not payable via this link.
+    const payable = client.payment_status !== 'cancelled' && isDueNow(client);
+
     // Always use client.plan_price as the source of truth — it reflects any
     // custom or discounted rate the admin has set, rather than the standard plan price.
     return NextResponse.json({
@@ -54,6 +59,7 @@ export async function GET(request) {
       planName: plan?.name || client.selected_plan,
       displayPrice: `KES ${client.plan_price.toLocaleString()}`,
       paymentStatus: client.payment_status,
+      payable,
     });
   } catch (err) {
     console.error('Token verification error:', err);

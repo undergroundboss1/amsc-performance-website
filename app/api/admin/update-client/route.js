@@ -59,6 +59,7 @@ export async function POST(request) {
       clientId,
       trainingStartDate, discountPercent, customMonthlyRate, partnershipNote, amscMetricsAthleteId,
       trainingStatus, inactiveReason, expectedReturnDate, pauseCreditApproved, pauseCreditDays,
+      email, phone, fullName,
     } = body;
 
     if (!clientId) {
@@ -69,6 +70,34 @@ export async function POST(request) {
 
     // Build the update payload — only include fields that were provided
     const updates = {};
+
+    // ── Contact info ──────────────────────────────────────────────────────
+    if ('email' in body) {
+      const e = (email || '').trim();
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) {
+        return NextResponse.json(
+          { error: 'A valid email address is required.' },
+          { status: 400 }
+        );
+      }
+      updates.email = e;
+    }
+
+    if ('phone' in body) {
+      const p = (phone || '').trim();
+      if (!p) {
+        return NextResponse.json({ error: 'Phone cannot be blank.' }, { status: 400 });
+      }
+      updates.phone = p;
+    }
+
+    if ('fullName' in body) {
+      const n = (fullName || '').trim();
+      if (!n) {
+        return NextResponse.json({ error: 'Full name cannot be blank.' }, { status: 400 });
+      }
+      updates.full_name = n;
+    }
 
     // ── trainingStartDate ─────────────────────────────────────────────────
     if ('trainingStartDate' in body) {

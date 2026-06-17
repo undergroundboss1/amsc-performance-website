@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabase } from '../../../../lib/supabase';
 import { getPlanById } from '../../../../lib/plans';
+import { isDueNow } from '../../../../lib/billing';
 
 /**
  * POST /api/payments/mpesa
@@ -35,8 +36,12 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Application not yet approved.' }, { status: 403 });
     }
 
-    if (client.payment_status === 'paid') {
-      return NextResponse.json({ error: 'This subscription is already paid.' }, { status: 400 });
+    // Allow renewal once the cycle has elapsed; block double-pay within a cycle.
+    if (client.payment_status === 'cancelled') {
+      return NextResponse.json({ error: 'This subscription has been cancelled.' }, { status: 400 });
+    }
+    if (!isDueNow(client)) {
+      return NextResponse.json({ error: 'You\'re already paid up for this cycle.' }, { status: 400 });
     }
 
     const plan = getPlanById(client.selected_plan);

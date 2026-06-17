@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabase } from '../../../../lib/supabase';
 import { trainingPlans } from '../../../../lib/plans';
+import { getPaymentTiming } from '../../../../lib/billing';
 import { sendEmail, buildPaymentReminderEmail, buildAdminPaymentAlertEmail } from '../../../../lib/email';
 
 /**
@@ -12,7 +13,9 @@ import { sendEmail, buildPaymentReminderEmail, buildAdminPaymentAlertEmail } fro
  *   1d  — 1 day before due
  *   0d  — on the due date
  *
- * Due date = last_paid_at + 30 days.
+ * Due date comes from the shared billing util (lib/billing.js) so reminders fire
+ * on exactly the same date the admin dashboard shows — calendar-month anchoring
+ * when training_start_date is set, else last_paid_at + 30 days.
  *
  * Active clients = last_paid_at set + training_status = 'active'.
  * Applies to all members (Paystack and in-person cash clients alike).
@@ -47,7 +50,7 @@ export async function GET(request) {
   // Fetch all active members (have paid at least once, not paused, real email)
   const { data: clients, error } = await supabase
     .from('clients')
-    .select('id, full_name, email, selected_plan, plan_price, approval_token, last_paid_at, reminders_sent, training_status')
+    .select('id, full_name, email, selected_plan, plan_price, approval_token, last_paid_at, reminders_sent, training_status, training_start_date, pause_credit_days, payment_provider')
     .eq('application_status', 'approved')
     .eq('training_status', 'active')
     .not('last_paid_at', 'is', null);
@@ -70,10 +73,12 @@ export async function GET(request) {
       continue;
     }
 
-    // Calculate due date and days remaining
-    const lastPaid = new Date(client.last_paid_at);
-    const dueDate = new Date(lastPaid);
-    dueDate.setDate(dueDate.getDate() + 30);
+    // Calculate due date and days remaining via the shared billing util.
+    const timing = getPaymentTiming(client, today);
+    if (!timing || timing.paused || !timing.nextDue) continue;
+
+    // Normalise the due date to start-of-day so stage matching is exact.
+    const dueDate = new Date(timing.nextDue);
     dueDate.setHours(0, 0, 0, 0);
 
     const msPerDay = 24 * 60 * 60 * 1000;

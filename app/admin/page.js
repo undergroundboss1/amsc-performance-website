@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { trainingPlans } from '../../lib/plans';
+import { getPaymentTiming } from '../../lib/billing';
 
 /**
  * /admin — Internal dashboard for reviewing applications.
@@ -35,43 +36,6 @@ function paymentMethodLabel(method) {
     other: 'Other',
   };
   return labels[method] || method || '—';
-}
-
-function getPaymentTiming(client) {
-  // Paused clients: suppress the billing clock entirely
-  if (client.training_status === 'inactive') {
-    return { paused: true, inactiveSince: client.inactive_since };
-  }
-
-  if (!client.last_paid_at && !client.training_start_date) return null;
-
-  const now = new Date();
-  // Factor in carry-over credit days: shift last_paid_at forward so the billing
-  // window is extended by the number of unused days credited from a previous pause.
-  const rawLastPaid = client.last_paid_at ? new Date(client.last_paid_at) : null;
-  const creditMs = (client.pause_credit_days || 0) * 24 * 60 * 60 * 1000;
-  const lastPaid = rawLastPaid ? new Date(rawLastPaid.getTime() + creditMs) : null;
-  const isAutoRenew = client.payment_provider === 'paystack'; // card — Paystack handles renewals
-
-  // If training_start_date is set, use it as the billing cycle anchor.
-  // This factors in days trained before payment — the cycle counts from when
-  // training actually started, not when payment was received.
-  // If not set, fall back to last_paid_at (standard behaviour).
-  const cycleAnchor = client.training_start_date
-    ? new Date(client.training_start_date)
-    : lastPaid;
-
-  // Find the next 30-day boundary from cycleAnchor that is still in the future.
-  const MS_PER_CYCLE = 30 * 24 * 60 * 60 * 1000;
-  const msElapsed = now - cycleAnchor;
-  const cyclesCompleted = Math.max(0, Math.floor(msElapsed / MS_PER_CYCLE));
-  const nextDue = new Date(cycleAnchor.getTime() + (cyclesCompleted + 1) * MS_PER_CYCLE);
-
-  const daysUntilDue = Math.ceil((nextDue - now) / (1000 * 60 * 60 * 24));
-  const daysOverdue = daysUntilDue < 0 ? Math.abs(daysUntilDue) : 0;
-  const usingStartDate = !!client.training_start_date;
-
-  return { lastPaid, nextDue, daysUntilDue, daysOverdue, isAutoRenew, cycleAnchor, usingStartDate };
 }
 
 function effectiveRate(client) {
@@ -516,6 +480,18 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
   const [metricsSaving, setMetricsSaving] = useState(false);
   const [metricsResult, setMetricsResult] = useState(null);
 
+  // Contact info edit state
+  const [showContactEditor, setShowContactEditor] = useState(false);
+  const [contactName, setContactName] = useState(client.full_name || '');
+  const [contactEmail, setContactEmail] = useState(client.email || '');
+  const [contactPhone, setContactPhone] = useState(client.phone || '');
+  const [contactSaving, setContactSaving] = useState(false);
+  const [contactResult, setContactResult] = useState(null);
+
+  // Online-payment transition state
+  const [transitionLoading, setTransitionLoading] = useState(false);
+  const [transitionResult, setTransitionResult] = useState(null);
+
   // Training status state
   const [trainingStatus, setTrainingStatus] = useState(client.training_status || 'active');
   const [inactiveReason, setInactiveReason] = useState(client.inactive_reason || '');
@@ -620,6 +596,13 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
   const [addPaymentLoading, setAddPaymentLoading] = useState(false);
   const [addPaymentResult, setAddPaymentResult] = useState(null); // { ok: bool, message: string }
 
+  // Edit / delete payment state
+  const [editingPaymentId, setEditingPaymentId] = useState(null);
+  const [editPaymentForm, setEditPaymentForm] = useState({ amount: '', paymentDate: '', paymentMethod: 'manual_cash', notes: '' });
+  const [editPaymentLoading, setEditPaymentLoading] = useState(false);
+  const [deletingPaymentId, setDeletingPaymentId] = useState(null);
+  const [paymentActionResult, setPaymentActionResult] = useState(null);
+
   const isCardClient = client.payment_provider === 'paystack';
   const planChanged = selectedPlan !== client.selected_plan;
   const selectedPlanObj = trainingPlans.find(p => p.id === selectedPlan);
@@ -693,6 +676,55 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
       setMetricsResult({ success: false, message: 'Network error.' });
     } finally {
       setMetricsSaving(false);
+    }
+  }
+
+  async function handleTransitionOnline() {
+    if (!confirm(`Send ${client.full_name} an email inviting them to switch to online payments? Their plan and price won't change.`)) return;
+    setTransitionLoading(true);
+    setTransitionResult(null);
+    try {
+      const res = await fetch('/api/admin/transition-online', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminKey}` },
+        body: JSON.stringify({ clientId: client.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) { setTransitionResult({ ok: false, message: json.error || 'Failed to send.' }); return; }
+      setTransitionResult({ ok: true, message: json.message });
+      setClient(c => ({ ...c, online_transition_sent_at: new Date().toISOString() }));
+      onUpdate();
+    } catch {
+      setTransitionResult({ ok: false, message: 'Network error. Please try again.' });
+    } finally {
+      setTransitionLoading(false);
+    }
+  }
+
+  async function saveContact() {
+    setContactSaving(true);
+    setContactResult(null);
+    try {
+      const res = await fetch('/api/admin/update-client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminKey}` },
+        body: JSON.stringify({
+          clientId: client.id,
+          fullName: contactName,
+          email: contactEmail,
+          phone: contactPhone,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setContactResult({ success: false, message: data.error || 'Failed to save.' }); return; }
+      setClient(c => ({ ...c, full_name: contactName.trim(), email: contactEmail.trim(), phone: contactPhone.trim() }));
+      setContactResult({ success: true, message: 'Contact info saved.' });
+      setShowContactEditor(false);
+      onUpdate();
+    } catch {
+      setContactResult({ success: false, message: 'Network error. Please try again.' });
+    } finally {
+      setContactSaving(false);
     }
   }
 
@@ -839,6 +871,68 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
     }
   }
 
+  function startEditPayment(p) {
+    setEditingPaymentId(p.id);
+    setPaymentActionResult(null);
+    setEditPaymentForm({
+      amount: String(p.amount),
+      paymentDate: new Date(p.payment_date).toISOString().split('T')[0],
+      paymentMethod: ['manual_cash', 'manual_bank_transfer', 'other'].includes(p.payment_method) ? p.payment_method : 'other',
+      notes: p.notes || '',
+    });
+  }
+
+  async function saveEditPayment(paymentId) {
+    setEditPaymentLoading(true);
+    setPaymentActionResult(null);
+    try {
+      const res = await fetch('/api/admin/update-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminKey}` },
+        body: JSON.stringify({
+          paymentId,
+          amount: Number(editPaymentForm.amount),
+          paymentDate: editPaymentForm.paymentDate,
+          paymentMethod: editPaymentForm.paymentMethod,
+          notes: editPaymentForm.notes || null,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) { setPaymentActionResult({ ok: false, message: json.error || 'Failed to update payment.' }); return; }
+      setPaymentActionResult({ ok: true, message: 'Payment updated.' });
+      setEditingPaymentId(null);
+      if (json.lastPaidAt !== undefined) setClient(c => ({ ...c, last_paid_at: json.lastPaidAt }));
+      fetchPayments();
+      if (onUpdate) onUpdate();
+    } catch {
+      setPaymentActionResult({ ok: false, message: 'Something went wrong.' });
+    } finally {
+      setEditPaymentLoading(false);
+    }
+  }
+
+  async function deletePayment(paymentId) {
+    setDeletingPaymentId(paymentId);
+    setPaymentActionResult(null);
+    try {
+      const res = await fetch('/api/admin/delete-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminKey}` },
+        body: JSON.stringify({ paymentId }),
+      });
+      const json = await res.json();
+      if (!res.ok) { setPaymentActionResult({ ok: false, message: json.error || 'Failed to delete payment.' }); return; }
+      setPaymentActionResult({ ok: true, message: 'Payment deleted.' });
+      if (json.lastPaidAt !== undefined) setClient(c => ({ ...c, last_paid_at: json.lastPaidAt }));
+      fetchPayments();
+      if (onUpdate) onUpdate();
+    } catch {
+      setPaymentActionResult({ ok: false, message: 'Something went wrong.' });
+    } finally {
+      setDeletingPaymentId(null);
+    }
+  }
+
   useEffect(() => {
     fetchPayments();
   }, [client.id]);
@@ -865,29 +959,130 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
 
       {/* ── CONTACT ──────────────────────────────────────────── */}
       <div className="bg-surface border border-white/5 rounded-xl p-6 mb-4">
-        <p className="text-[10px] font-display font-bold tracking-widest uppercase text-accent mb-4">Contact</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div className="bg-surface-light rounded-lg p-3">
-            <span className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">Email</span>
-            <span className="text-white text-sm font-body">{client.email}</span>
-          </div>
-          <div className="bg-surface-light rounded-lg p-3">
-            <span className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">Phone</span>
-            <span className="text-white text-sm font-body">{client.phone}</span>
-          </div>
-          <div className="bg-surface-light rounded-lg p-3">
-            <span className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">Applied</span>
-            <span className="text-white text-sm font-body">
-              {new Date(client.created_at).toLocaleDateString('en-KE', {
-                day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-              })}
-            </span>
-          </div>
-          <div className="bg-surface-light rounded-lg p-3">
-            <span className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">Sport</span>
-            <span className="text-white text-sm font-body">{client.sport || '—'}</span>
-          </div>
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-[10px] font-display font-bold tracking-widest uppercase text-accent">Contact</p>
+          <button
+            onClick={() => {
+              setShowContactEditor(s => !s);
+              setContactResult(null);
+              setContactName(client.full_name || '');
+              setContactEmail(client.email?.endsWith('.placeholder') ? '' : (client.email || ''));
+              setContactPhone(client.phone === '000-import' ? '' : (client.phone || ''));
+            }}
+            className="px-3 py-1.5 text-[10px] font-display font-bold tracking-wider uppercase border border-white/10 rounded-full text-white/60 hover:border-white/30 hover:text-white transition-colors cursor-pointer"
+          >
+            {showContactEditor ? 'Cancel' : 'Edit'}
+          </button>
         </div>
+
+        {!showContactEditor && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="bg-surface-light rounded-lg p-3">
+              <span className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">Email</span>
+              {client.email?.endsWith('.placeholder') ? (
+                <span className="text-amber-400 text-sm font-body">No email on file (import placeholder)</span>
+              ) : (
+                <span className="text-white text-sm font-body">{client.email}</span>
+              )}
+            </div>
+            <div className="bg-surface-light rounded-lg p-3">
+              <span className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">Phone</span>
+              <span className="text-white text-sm font-body">{client.phone}</span>
+            </div>
+            <div className="bg-surface-light rounded-lg p-3">
+              <span className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">Applied</span>
+              <span className="text-white text-sm font-body">
+                {new Date(client.created_at).toLocaleDateString('en-KE', {
+                  day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+                })}
+              </span>
+            </div>
+            <div className="bg-surface-light rounded-lg p-3">
+              <span className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">Sport</span>
+              <span className="text-white text-sm font-body">{client.sport || '—'}</span>
+            </div>
+          </div>
+        )}
+
+        {showContactEditor && (
+          <div className="space-y-3">
+            <div>
+              <label className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">Full Name</label>
+              <input
+                type="text"
+                value={contactName}
+                onChange={e => setContactName(e.target.value)}
+                className="w-full bg-surface-light border border-white/10 rounded-lg p-3 text-white text-sm font-body focus:border-accent/50 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">Email</label>
+              <input
+                type="email"
+                value={contactEmail.endsWith('.placeholder') ? '' : contactEmail}
+                onChange={e => setContactEmail(e.target.value)}
+                placeholder="client@email.com"
+                className="w-full bg-surface-light border border-white/10 rounded-lg p-3 text-white text-sm font-body focus:border-accent/50 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">Phone</label>
+              <input
+                type="tel"
+                value={contactPhone === '000-import' ? '' : contactPhone}
+                onChange={e => setContactPhone(e.target.value)}
+                placeholder="+254…"
+                className="w-full bg-surface-light border border-white/10 rounded-lg p-3 text-white text-sm font-body focus:border-accent/50 focus:outline-none"
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={saveContact}
+                disabled={contactSaving}
+                className="px-5 py-2.5 bg-accent hover:bg-accent/90 text-white font-display font-bold text-xs tracking-widest uppercase rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {contactSaving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {contactResult && (
+          <p className={`mt-3 text-xs font-body ${contactResult.success ? 'text-green-400' : 'text-red-400'}`}>
+            {contactResult.message}
+          </p>
+        )}
+
+        {/* Online-payment transition — for cash/import clients not yet on an online provider */}
+        {!client.payment_provider && (
+          <div className="mt-4 pt-4 border-t border-white/5">
+            {client.email?.endsWith('.placeholder') ? (
+              <p className="text-xs font-body text-white/40">
+                Add a real email above to switch this client to online payments.
+              </p>
+            ) : (
+              <>
+                <button
+                  onClick={handleTransitionOnline}
+                  disabled={transitionLoading}
+                  className="px-4 py-2 text-[11px] font-display font-bold tracking-wider uppercase border border-accent/40 rounded-full text-accent hover:bg-accent hover:text-white transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {transitionLoading ? 'Sending…' : (client.online_transition_sent_at ? 'Resend online-payment invite' : 'Switch to online payments')}
+                </button>
+                {client.online_transition_sent_at && !transitionResult && (
+                  <p className="mt-2 text-[11px] font-body text-white/40">
+                    Invite sent {formatDate(new Date(client.online_transition_sent_at))}.
+                  </p>
+                )}
+              </>
+            )}
+            {transitionResult && (
+              <p className={`mt-2 text-xs font-body ${transitionResult.ok ? 'text-green-400' : 'text-red-400'}`}>
+                {transitionResult.message}
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── TRAINING STATUS ──────────────────────────────────── */}
@@ -1601,22 +1796,63 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid #222' }}>
-                    {['Date', 'Amount', 'Method', 'Rent Split', 'Net Revenue', 'Months', 'Notes'].map(h => (
-                      <th key={h} style={{ textAlign: 'left', padding: '6px 10px', color: '#555', fontFamily: 'Oswald, sans-serif', fontWeight: 700, fontSize: '11px', letterSpacing: '0.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                    {['Date', 'Amount', 'Method', 'Rent Split', 'Net Revenue', 'Months', 'Notes', ''].map((h, i) => (
+                      <th key={h || `col-${i}`} style={{ textAlign: 'left', padding: '6px 10px', color: '#555', fontFamily: 'Oswald, sans-serif', fontWeight: 700, fontSize: '11px', letterSpacing: '0.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {payments.map(p => (
-                    <tr key={p.id} style={{ borderBottom: '1px solid #111' }}>
-                      <td style={{ padding: '8px 10px', color: '#f5f5f8', whiteSpace: 'nowrap' }}>{formatDate(new Date(p.payment_date))}</td>
-                      <td style={{ padding: '8px 10px', color: '#f5f5f8', fontWeight: 600 }}>{formatKES(p.amount)}</td>
-                      <td style={{ padding: '8px 10px', color: '#d3d3d3' }}>{paymentMethodLabel(p.payment_method)}</td>
-                      <td style={{ padding: '8px 10px', color: p.rent_split > 0 ? '#fbbf24' : '#555' }}>{p.rent_split > 0 ? formatKES(p.rent_split) : '—'}</td>
-                      <td style={{ padding: '8px 10px', color: '#22c55e' }}>{formatKES(p.net_revenue)}</td>
-                      <td style={{ padding: '8px 10px', color: '#d3d3d3', textAlign: 'center' }}>{p.months_covered}</td>
-                      <td style={{ padding: '8px 10px', color: '#555', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.notes || '—'}</td>
-                    </tr>
+                    editingPaymentId === p.id ? (
+                      <tr key={p.id} style={{ borderBottom: '1px solid #111', background: '#0d0d0d' }}>
+                        <td colSpan={8} style={{ padding: '12px 10px' }}>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'flex-end' }}>
+                            <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '10px', color: '#888', fontFamily: 'Oswald, sans-serif', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                              Amount
+                              <input type="number" min="1" value={editPaymentForm.amount} onChange={e => setEditPaymentForm(f => ({ ...f, amount: e.target.value }))} style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: '6px', padding: '7px 10px', color: '#f5f5f8', fontSize: '13px', width: '110px' }} />
+                            </label>
+                            <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '10px', color: '#888', fontFamily: 'Oswald, sans-serif', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                              Date
+                              <input type="date" value={editPaymentForm.paymentDate} onChange={e => setEditPaymentForm(f => ({ ...f, paymentDate: e.target.value }))} style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: '6px', padding: '7px 10px', color: '#f5f5f8', fontSize: '13px' }} />
+                            </label>
+                            <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '10px', color: '#888', fontFamily: 'Oswald, sans-serif', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                              Method
+                              <select value={editPaymentForm.paymentMethod} onChange={e => setEditPaymentForm(f => ({ ...f, paymentMethod: e.target.value }))} style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: '6px', padding: '7px 10px', color: '#f5f5f8', fontSize: '13px' }}>
+                                <option value="manual_cash">Cash</option>
+                                <option value="manual_bank_transfer">Bank Transfer</option>
+                                <option value="other">Other</option>
+                              </select>
+                            </label>
+                            <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '10px', color: '#888', fontFamily: 'Oswald, sans-serif', textTransform: 'uppercase', letterSpacing: '0.08em', flex: 1, minWidth: '140px' }}>
+                              Notes
+                              <input type="text" value={editPaymentForm.notes} onChange={e => setEditPaymentForm(f => ({ ...f, notes: e.target.value }))} style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: '6px', padding: '7px 10px', color: '#f5f5f8', fontSize: '13px', width: '100%' }} />
+                            </label>
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              <button onClick={() => saveEditPayment(p.id)} disabled={editPaymentLoading} style={{ background: '#a60a08', color: '#f5f5f8', border: 'none', borderRadius: '6px', padding: '8px 16px', fontSize: '12px', fontWeight: 600, cursor: editPaymentLoading ? 'not-allowed' : 'pointer', opacity: editPaymentLoading ? 0.6 : 1 }}>{editPaymentLoading ? 'Saving…' : 'Save'}</button>
+                              <button onClick={() => setEditingPaymentId(null)} style={{ background: 'transparent', color: '#888', border: '1px solid #333', borderRadius: '6px', padding: '8px 16px', fontSize: '12px', cursor: 'pointer' }}>Cancel</button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      <tr key={p.id} style={{ borderBottom: '1px solid #111' }}>
+                        <td style={{ padding: '8px 10px', color: '#f5f5f8', whiteSpace: 'nowrap' }}>{formatDate(new Date(p.payment_date))}</td>
+                        <td style={{ padding: '8px 10px', color: '#f5f5f8', fontWeight: 600 }}>{formatKES(p.amount)}</td>
+                        <td style={{ padding: '8px 10px', color: '#d3d3d3' }}>{paymentMethodLabel(p.payment_method)}</td>
+                        <td style={{ padding: '8px 10px', color: p.rent_split > 0 ? '#fbbf24' : '#555' }}>{p.rent_split > 0 ? formatKES(p.rent_split) : '—'}</td>
+                        <td style={{ padding: '8px 10px', color: '#22c55e' }}>{formatKES(p.net_revenue)}</td>
+                        <td style={{ padding: '8px 10px', color: '#d3d3d3', textAlign: 'center' }}>{p.months_covered}</td>
+                        <td style={{ padding: '8px 10px', color: '#555', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.notes || '—'}</td>
+                        <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>
+                          <button onClick={() => startEditPayment(p)} title="Edit" style={{ background: 'transparent', color: '#888', border: '1px solid #333', borderRadius: '6px', padding: '4px 10px', fontSize: '11px', cursor: 'pointer', marginRight: '6px' }}>Edit</button>
+                          {deletingPaymentId === p.id ? (
+                            <span style={{ fontSize: '11px', color: '#888' }}>Deleting…</span>
+                          ) : (
+                            <button onClick={() => { if (confirm(`Delete this ${formatKES(p.amount)} payment from ${formatDate(new Date(p.payment_date))}? This cannot be undone.`)) deletePayment(p.id); }} title="Delete" style={{ background: 'transparent', color: '#a60a08', border: '1px solid #3a1110', borderRadius: '6px', padding: '4px 10px', fontSize: '11px', cursor: 'pointer' }}>Delete</button>
+                          )}
+                        </td>
+                      </tr>
+                    )
                   ))}
                 </tbody>
                 {/* Totals row */}
@@ -1636,12 +1872,16 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
                         <td style={{ padding: '8px 10px', color: '#22c55e', fontWeight: 600 }}>{formatKES(totals.net)}</td>
                         <td></td>
                         <td></td>
+                        <td></td>
                       </tr>
                     </tfoot>
                   );
                 })()}
               </table>
             </div>
+          )}
+          {paymentActionResult && (
+            <p style={{ marginTop: '10px', fontSize: '12px', color: paymentActionResult.ok ? '#22c55e' : '#f87171' }}>{paymentActionResult.message}</p>
           )}
         </div>
       </div>

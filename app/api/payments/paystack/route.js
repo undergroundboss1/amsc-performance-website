@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabase } from '../../../../lib/supabase';
 import { getPlanById } from '../../../../lib/plans';
+import { isDueNow } from '../../../../lib/billing';
 
 /**
  * POST /api/payments/paystack
@@ -41,9 +42,13 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Application not yet approved.' }, { status: 403 });
     }
 
-    // Don't allow double-payment
-    if (client.payment_status === 'paid') {
-      return NextResponse.json({ error: 'This subscription is already paid.' }, { status: 400 });
+    // Don't allow double-payment within a cycle the client has already covered.
+    // Once their cycle elapses (isDueNow), renewal through this link is allowed.
+    if (client.payment_status === 'cancelled') {
+      return NextResponse.json({ error: 'This subscription has been cancelled.' }, { status: 400 });
+    }
+    if (!isDueNow(client)) {
+      return NextResponse.json({ error: 'You\'re already paid up for this cycle.' }, { status: 400 });
     }
 
     const plan = getPlanById(client.selected_plan);
