@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { trainingPlans } from '../../lib/plans';
+import { trainingPlans, getEffectiveMonthlyRate } from '../../lib/plans';
 import { getPaymentTiming } from '../../lib/billing';
 
 /**
@@ -36,13 +36,6 @@ function paymentMethodLabel(method) {
     other: 'Other',
   };
   return labels[method] || method || '—';
-}
-
-function effectiveRate(client) {
-  if (client.custom_monthly_rate) return Number(client.custom_monthly_rate);
-  if (Number(client.discount_percent) > 0)
-    return Math.round(client.plan_price * (1 - Number(client.discount_percent) / 100));
-  return client.plan_price;
 }
 
 function providerLabel(provider) {
@@ -587,7 +580,7 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
   const [paymentsLoading, setPaymentsLoading] = useState(false);
   const [showAddPayment, setShowAddPayment] = useState(false);
   const [addPaymentForm, setAddPaymentForm] = useState({
-    amount: String(effectiveRate(client)),
+    amount: String(getEffectiveMonthlyRate(client)),
     paymentDate: new Date().toISOString().split('T')[0],
     paymentMethod: 'manual_cash',
     monthsCovered: '1',
@@ -856,7 +849,7 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
       const json = await res.json();
       if (res.ok) {
         setAddPaymentResult({ ok: true, message: json.message });
-        setAddPaymentForm({ amount: String(effectiveRate(client)), paymentDate: new Date().toISOString().split('T')[0], paymentMethod: 'manual_cash', monthsCovered: '1', notes: '' });
+        setAddPaymentForm({ amount: String(getEffectiveMonthlyRate(client)), paymentDate: new Date().toISOString().split('T')[0], paymentMethod: 'manual_cash', monthsCovered: '1', notes: '' });
         setShowAddPayment(false);
         fetchPayments(); // refresh list
         // Also refresh the parent client list
@@ -1348,7 +1341,7 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
                 Effective Monthly Rate
               </p>
               <p style={{ fontSize: '20px', fontWeight: 700, color: '#f5f5f8', margin: 0 }}>
-                {formatKES(effectiveRate(client))}
+                {formatKES(getEffectiveMonthlyRate(client))}
                 <span style={{ fontSize: '12px', color: '#555', fontWeight: 400, marginLeft: '6px' }}>/ month</span>
               </p>
               {/* Explain the rate */}

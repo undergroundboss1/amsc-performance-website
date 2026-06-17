@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSupabase } from '../../../../lib/supabase';
-import { getPlanById } from '../../../../lib/plans';
+import { getPlanById, getEffectiveMonthlyRate } from '../../../../lib/plans';
 import { isDueNow } from '../../../../lib/billing';
 
 /**
@@ -51,7 +51,9 @@ export async function POST(request) {
 
     const reference = `AMSC-MPESA-${Date.now()}-${clientId.slice(0, 8)}`;
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://amscperformance.com';
-    const amountInKobo = plan.price * 100;
+    // Charge the client's effective rate (honours custom_monthly_rate / discount),
+    // not the standard plan price.
+    const amountInKobo = getEffectiveMonthlyRate(client) * 100;
 
     const response = await fetch('https://api.paystack.co/transaction/initialize', {
       method: 'POST',

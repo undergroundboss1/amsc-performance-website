@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSupabase } from '../../../../lib/supabase';
-import { getPlanById } from '../../../../lib/plans';
+import { getPlanById, getEffectiveMonthlyRate } from '../../../../lib/plans';
 import { isDueNow } from '../../../../lib/billing';
 
 /**
@@ -27,7 +27,7 @@ export async function GET(request) {
 
     const { data: client, error } = await supabase
       .from('clients')
-      .select('id, full_name, selected_plan, plan_price, payment_status, application_status, last_paid_at, training_start_date, training_status, pause_credit_days, payment_provider')
+      .select('id, full_name, selected_plan, plan_price, custom_monthly_rate, discount_percent, payment_status, application_status, last_paid_at, training_start_date, training_status, pause_credit_days, payment_provider')
       .eq('approval_token', token)
       .single();
 
@@ -57,7 +57,7 @@ export async function GET(request) {
       clientId: client.id,
       name: client.full_name.split(' ')[0], // Only first name for privacy
       planName: plan?.name || client.selected_plan,
-      displayPrice: `KES ${client.plan_price.toLocaleString()}`,
+      displayPrice: `KES ${getEffectiveMonthlyRate(client).toLocaleString()}`,
       paymentStatus: client.payment_status,
       payable,
     });

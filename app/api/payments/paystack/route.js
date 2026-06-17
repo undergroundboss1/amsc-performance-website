@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSupabase } from '../../../../lib/supabase';
-import { getPlanById } from '../../../../lib/plans';
+import { getPlanById, getEffectiveMonthlyRate } from '../../../../lib/plans';
 import { isDueNow } from '../../../../lib/billing';
 
 /**
@@ -60,13 +60,16 @@ export async function POST(request) {
     const reference = `AMSC-${Date.now()}-${clientId.slice(0, 8)}`;
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://amscperformance.com';
 
-    // Always charge client.plan_price — this reflects any custom or discounted
-    // rate set by the admin, rather than the standard plan price.
-    const amountInKobo = client.plan_price * 100;
+    // Charge the client's effective rate (honours custom_monthly_rate / discount).
+    const amountInKobo = getEffectiveMonthlyRate(client) * 100;
 
-    // Initialize Paystack transaction with plan code.
-    // Including `plan` causes Paystack to automatically create a recurring
-    // subscription for this customer after the first charge completes.
+    // Paystack subscription plans bill a fixed amount (the standard plan price),
+    // so we can only attach the plan code — which enables auto-renew — for clients
+    // on the standard rate. Custom/discounted clients are charged the correct
+    // amount as a one-time card payment; their renewal is handled by the monthly
+    // reminder system (same as M-Pesa clients).
+    const isStandardRate = !client.custom_monthly_rate && !(Number(client.discount_percent) > 0);
+
     const response = await fetch('https://api.paystack.co/transaction/initialize', {
       method: 'POST',
       headers: {
@@ -78,7 +81,7 @@ export async function POST(request) {
         amount: amountInKobo,
         currency: 'KES',
         reference,
-        plan: plan.paystackPlanCode,
+        ...(isStandardRate ? { plan: plan.paystackPlanCode } : {}),
         channels: ['card', 'mobile_money'],
         callback_url: `${siteUrl}/join/success?reference=${reference}`,
         metadata: {

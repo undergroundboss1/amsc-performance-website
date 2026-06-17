@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSupabase } from '../../../../lib/supabase';
-import { trainingPlans } from '../../../../lib/plans';
+import { trainingPlans, getEffectiveMonthlyRate } from '../../../../lib/plans';
 import { getPaymentTiming } from '../../../../lib/billing';
 import { sendEmail, buildPaymentReminderEmail, buildAdminPaymentAlertEmail } from '../../../../lib/email';
 
@@ -50,7 +50,7 @@ export async function GET(request) {
   // Fetch all active members (have paid at least once, not paused, real email)
   const { data: clients, error } = await supabase
     .from('clients')
-    .select('id, full_name, email, selected_plan, plan_price, approval_token, last_paid_at, reminders_sent, training_status, training_start_date, pause_credit_days, payment_provider')
+    .select('id, full_name, email, selected_plan, plan_price, custom_monthly_rate, discount_percent, approval_token, last_paid_at, reminders_sent, training_status, training_start_date, pause_credit_days, payment_provider')
     .eq('application_status', 'approved')
     .eq('training_status', 'active')
     .not('last_paid_at', 'is', null);
@@ -102,7 +102,7 @@ export async function GET(request) {
     // Build email
     const plan = trainingPlans.find(p => p.id === client.selected_plan);
     const planName = plan?.name || client.selected_plan;
-    const planPrice = `KES ${(client.plan_price || plan?.price || 0).toLocaleString()}`;
+    const planPrice = `KES ${getEffectiveMonthlyRate(client).toLocaleString()}`;
 
     // Only Paystack clients have an approval_token payment link
     const paymentUrl = client.approval_token
@@ -148,7 +148,7 @@ export async function GET(request) {
       return {
         name: d.name,
         plan: plan?.name || client?.selected_plan || '—',
-        amount: `KES ${(client?.plan_price || 0).toLocaleString()}`,
+        amount: `KES ${(client ? getEffectiveMonthlyRate(client) : 0).toLocaleString()}`,
       };
     });
     const dateStr = new Date().toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
