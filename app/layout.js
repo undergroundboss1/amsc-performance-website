@@ -5,6 +5,7 @@ import Footer from "../components/Footer";
 import CookieConsent from "../components/CookieConsent";
 import { ConsentProvider } from "../components/ConsentContext";
 import ScrollProgressBar from "../components/ScrollProgressBar";
+import GoogleAnalytics from "../components/GoogleAnalytics";
 
 const barlow = Barlow({
   subsets: ["latin"],
@@ -20,31 +21,60 @@ const barlowCondensed = Barlow_Condensed({
   display: "swap",
 });
 
+const SITE_URL = 'https://amscperformance.com';
+
 export const metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://amsc-performance.vercel.app'),
+  metadataBase: new URL(SITE_URL),
   title: {
-    default: 'AMSC Performance | Engineered Athlete Development',
+    default: 'AMSC Performance | Elite Sports Performance Training in Nairobi, Kenya',
     template: '%s | AMSC Performance',
   },
-  description: 'Train Smarter. Move Better. Perform Longer. AMSC Performance provides structured athletic development systems for elite and aspiring athletes in Kenya.',
-  keywords: ['athletic training', 'sports performance', 'strength and conditioning', 'Kenya', 'athlete development', 'AMSC Performance'],
+  description: 'East and Central Africa\'s premier sports performance institution. Strength & conditioning, athlete monitoring, and combine testing for elite athletes in Nairobi, Kenya.',
+  keywords: [
+    'sports performance Nairobi',
+    'strength and conditioning Kenya',
+    'athlete training Nairobi',
+    'AMSC Performance',
+    'sports science Kenya',
+    'elite athlete development Nairobi',
+    'strength coach Nairobi',
+    'ACE certified trainer Kenya',
+    'basketball training Nairobi',
+    'football conditioning Kenya',
+    'sprint training Nairobi',
+    'sports performance East Africa',
+    'athlete testing Kenya',
+    'AMSC Combine',
+    'personal trainer Nairobi',
+  ],
+  alternates: {
+    canonical: SITE_URL,
+  },
   openGraph: {
     type: 'website',
     locale: 'en_KE',
+    url: SITE_URL,
     siteName: 'AMSC Performance',
-    title: 'AMSC Performance | Engineered Athlete Development',
-    description: 'Structured athletic development systems for elite and aspiring athletes.',
-    images: [{ url: '/images/amsc-logo-hero.png', width: 500, height: 200, alt: 'AMSC Performance' }],
+    title: 'AMSC Performance | Elite Sports Performance Training in Nairobi, Kenya',
+    description: 'East and Central Africa\'s premier sports performance institution — strength & conditioning, athlete monitoring, and combine testing for elite athletes.',
+    images: [{ url: '/images/amsc-logo-hero.png', width: 800, height: 600, alt: 'AMSC Performance — Elite Sports Training in Nairobi' }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'AMSC Performance | Engineered Athlete Development',
-    description: 'Structured athletic development systems for elite and aspiring athletes.',
+    title: 'AMSC Performance | Elite Sports Performance Training in Nairobi, Kenya',
+    description: 'East and Central Africa\'s premier sports performance institution — strength & conditioning for elite athletes.',
     images: ['/images/amsc-logo-hero.png'],
   },
   robots: {
     index: true,
     follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-snippet': -1,
+      'max-image-preview': 'large',
+      'max-video-preview': -1,
+    },
   },
 };
 
@@ -63,44 +93,59 @@ export default function RootLayout({ children }) {
           dangerouslySetInnerHTML={{
             __html: JSON.stringify({
               '@context': 'https://schema.org',
-              '@type': 'SportsActivityLocation',
+              '@type': ['LocalBusiness', 'SportsClub'],
               name: 'AMSC Performance',
-              description: 'Engineered athlete development — structured training systems for elite and aspiring athletes in Kenya.',
-              url: process.env.NEXT_PUBLIC_SITE_URL,
-              logo: `${process.env.NEXT_PUBLIC_SITE_URL}/images/amsc-logo-hero.png`,
-              image: `${process.env.NEXT_PUBLIC_SITE_URL}/images/amsc-logo-hero.png`,
+              alternateName: 'AMSC',
+              description: 'East and Central Africa\'s premier sports performance institution — elite strength & conditioning, athlete monitoring, and performance testing based in Nairobi, Kenya.',
+              url: 'https://amscperformance.com',
+              logo: 'https://amscperformance.com/images/amsc-logo-hero.png',
+              image: 'https://amscperformance.com/images/amsc-logo-hero.png',
+              telephone: '+254796677414',
               address: {
                 '@type': 'PostalAddress',
+                streetAddress: 'The Courtyard, Vanga Road',
+                addressLocality: 'Nairobi',
+                addressRegion: 'Nairobi County',
                 addressCountry: 'KE',
               },
+              geo: {
+                '@type': 'GeoCoordinates',
+                latitude: '-1.2921',
+                longitude: '36.8219',
+              },
+              areaServed: [
+                { '@type': 'City', name: 'Nairobi' },
+                { '@type': 'Country', name: 'Kenya' },
+                { '@type': 'Place', name: 'East Africa' },
+              ],
               sameAs: [
                 'https://instagram.com/amscperformance',
               ],
               hasOfferCatalog: {
                 '@type': 'OfferCatalog',
-                name: 'Training Programs',
+                name: 'Sports Performance Training Programs',
                 itemListElement: [
                   {
                     '@type': 'Offer',
-                    itemOffered: { '@type': 'Service', name: 'One-on-One Coaching' },
+                    itemOffered: { '@type': 'Service', name: 'One-on-One Sports Performance Coaching', description: 'Private strength & conditioning sessions tailored to elite athletes in Nairobi.' },
                     price: '30000',
                     priceCurrency: 'KES',
                   },
                   {
                     '@type': 'Offer',
-                    itemOffered: { '@type': 'Service', name: 'Performance Group Training' },
+                    itemOffered: { '@type': 'Service', name: 'Performance Group Training', description: 'Small-group athletic development training in Nairobi.' },
                     price: '15000',
                     priceCurrency: 'KES',
                   },
                   {
                     '@type': 'Offer',
-                    itemOffered: { '@type': 'Service', name: 'Online Performance Training' },
+                    itemOffered: { '@type': 'Service', name: 'Online Performance Training', description: 'Remote strength & conditioning programming for athletes across Kenya and East Africa.' },
                     price: '12000',
                     priceCurrency: 'KES',
                   },
                   {
                     '@type': 'Offer',
-                    itemOffered: { '@type': 'Service', name: 'Youth Athletic Development' },
+                    itemOffered: { '@type': 'Service', name: 'Youth Athletic Development', description: 'Structured athletic development for youth athletes in Nairobi.' },
                     price: '10000',
                     priceCurrency: 'KES',
                   },
@@ -125,6 +170,7 @@ export default function RootLayout({ children }) {
           </main>
           <Footer />
           <CookieConsent />
+          <GoogleAnalytics />
         </ConsentProvider>
       </body>
     </html>

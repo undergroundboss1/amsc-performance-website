@@ -1,7 +1,28 @@
 'use client';
 import Script from 'next/script';
 import Link from 'next/link';
+import { Component } from 'react';
 import { useConsent } from './ConsentContext';
+
+// Error boundary to contain Behold widget crashes (known Mobile Safari JSON issue)
+class WidgetErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { failed: false }; }
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch() {} // swallow — Sentry already filters this via beforeSend
+  render() {
+    if (this.state.failed) {
+      return (
+        <div className="text-center py-16 border border-white/5 rounded-lg bg-surface-light">
+          <a href="https://instagram.com/amscperformance" target="_blank" rel="noopener noreferrer"
+            className="text-accent hover:underline text-sm font-body">
+            View our Instagram feed →
+          </a>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export default function InstagramFeed() {
   const { consent } = useConsent();
@@ -19,7 +40,9 @@ export default function InstagramFeed() {
       </div>
       <div className="max-w-7xl mx-auto">
         {allowed ? (
-          <behold-widget feed-id="az3ln0lhjRin0SMMW0f4"></behold-widget>
+          <WidgetErrorBoundary>
+            <behold-widget feed-id="az3ln0lhjRin0SMMW0f4"></behold-widget>
+          </WidgetErrorBoundary>
         ) : (
           <div className="text-center py-16 border border-white/5 rounded-lg bg-surface-light">
             <p className="text-secondary text-sm font-body mb-4">

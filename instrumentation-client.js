@@ -19,6 +19,23 @@ Sentry.init({
       blockAllMedia: true,
     }),
   ],
+
+  beforeSend(event, hint) {
+    const error = hint?.originalException;
+
+    // Ignore known third-party widget errors (Behold Instagram feed)
+    // Behold's widget.js fails to parse JSON on Mobile Safari — not our bug
+    if (
+      error?.message?.includes('JSON Parse error') &&
+      event?.exception?.values?.[0]?.stacktrace?.frames?.some(
+        (f) => f?.filename?.includes('widget.js') || f?.filename?.includes('behold')
+      )
+    ) {
+      return null;
+    }
+
+    return event;
+  },
 });
 
 // Captures client-side navigation transitions as Sentry spans

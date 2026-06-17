@@ -48,3 +48,4 @@ engine/reports/
 
 # Claude IDE session files
 .claude/
+data/errors_log.txt
