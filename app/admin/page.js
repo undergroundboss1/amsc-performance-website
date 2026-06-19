@@ -234,6 +234,7 @@ const appStatusColors = {
   pending_review: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
   approved: 'bg-green-500/20 text-green-400 border-green-500/30',
   declined: 'bg-red-500/20 text-red-400 border-red-500/30',
+  expired: 'bg-white/10 text-white/50 border-white/15',
 };
 
 const paymentStatusColors = {
@@ -1796,6 +1797,21 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
           <p className="text-white/30 text-sm font-body text-center py-2">
             Application was declined.
           </p>
+        )}
+
+        {client.application_status === 'expired' && (
+          <div>
+            <p className="text-white/40 text-sm font-body text-center mb-3">
+              Application expired — approved but never paid.
+            </p>
+            <button
+              onClick={() => handleAction('approve')}
+              disabled={actionLoading}
+              className="w-full bg-green-600 text-white font-display font-bold text-sm tracking-wider uppercase py-3 rounded-full hover:bg-green-700 transition-all cursor-pointer disabled:opacity-50"
+            >
+              {actionLoading ? 'Processing...' : 'Re-approve & Resend Payment Link'}
+            </button>
+          </div>
         )}
       </div>
 
@@ -3416,6 +3432,7 @@ export default function AdminPage() {
     { value: 'pending_review', label: 'Pending Review' },
     { value: 'approved', label: 'Approved' },
     { value: 'declined', label: 'Declined' },
+    { value: 'expired', label: 'Expired' },
     { value: 'all', label: 'All' },
   ];
 

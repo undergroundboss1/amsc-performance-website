@@ -104,6 +104,7 @@ export async function POST(request) {
         application_status: 'approved',
         approval_token: approvalToken,
         approved_at: new Date().toISOString(),
+        applicant_nudge_sent_at: null, // restart the stale-applicant follow-up clock
       })
       .eq('id', clientId);
 
