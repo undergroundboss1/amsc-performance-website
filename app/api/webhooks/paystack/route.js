@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import * as Sentry from '@sentry/nextjs';
 import { getSupabase } from '../../../../lib/supabase';
 import { getPlanById } from '../../../../lib/plans';
-import { sendEmail, buildOnboardingEmail } from '../../../../lib/email';
+import { sendEmail, buildOnboardingEmail, buildReceiptEmail } from '../../../../lib/email';
 
 /**
  * POST /api/webhooks/paystack
@@ -91,7 +91,7 @@ export async function POST(request) {
         // Fetch client to get their ID and plan info
         const { data: clientForPayment } = await supabase
           .from('clients')
-          .select('id, selected_plan, plan_price, training_start_date')
+          .select('id, full_name, email, selected_plan, plan_price, training_start_date')
           .eq('payment_reference', reference)
           .single();
 
@@ -110,7 +110,7 @@ export async function POST(request) {
             console.log(`Billing anchor set to first payment date for client ${clientForPayment.id}`);
           }
 
-          const { error: paymentInsertError } = await supabase
+          const { data: insertedPayment, error: paymentInsertError } = await supabase
             .from('payments')
             .insert({
               client_id: clientForPayment.id,
@@ -124,13 +124,40 @@ export async function POST(request) {
               months_covered: 1,
               notes: `Paystack ${data.channel} — ref: ${reference}`,
               source: 'webhook',
-            });
+            })
+            .select('id')
+            .single();
 
           if (paymentInsertError) {
             // Non-fatal — log but don't break the webhook response
             console.error('Paystack webhook: payments insert error:', paymentInsertError);
           } else {
             console.log(`Payment record inserted: ${amountKes} KES for client ${clientForPayment.id}`);
+
+            // ── Send receipt for this charge (first payment AND renewals) ──
+            if (clientForPayment.email && !clientForPayment.email.endsWith('.placeholder')) {
+              try {
+                const rplan = getPlanById(clientForPayment.selected_plan);
+                const rplanName = rplan?.name || clientForPayment.selected_plan || 'Training';
+                const { ok: receiptOk } = await sendEmail({
+                  to: clientForPayment.email,
+                  subject: `AMSC Performance | Payment Confirmed - ${rplanName}`,
+                  html: buildReceiptEmail({
+                    fullName: clientForPayment.full_name,
+                    planName: rplanName,
+                    amount: `KES ${Number(amountKes).toLocaleString()}`,
+                    dateStr: new Date(paidAt).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' }),
+                    methodLabel: paymentMethod === 'paystack_mpesa' ? 'M-Pesa' : 'Card',
+                    reference,
+                  }),
+                });
+                if (receiptOk && insertedPayment?.id) {
+                  await supabase.from('payments').update({ receipt_sent: true }).eq('id', insertedPayment.id);
+                }
+              } catch (receiptErr) {
+                console.error('Paystack webhook: receipt email error (non-fatal):', receiptErr);
+              }
+            }
           }
         }
       } catch (paymentErr) {

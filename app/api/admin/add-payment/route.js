@@ -1,5 +1,13 @@
 import { NextResponse } from 'next/server';
 import { getSupabase } from '../../../../lib/supabase';
+import { getPlanById } from '../../../../lib/plans';
+import { sendEmail, buildReceiptEmail } from '../../../../lib/email';
+
+const METHOD_LABELS = {
+  manual_cash: 'Cash',
+  manual_bank_transfer: 'Bank Transfer',
+  other: 'Other',
+};
 
 /**
  * POST /api/admin/add-payment
@@ -69,7 +77,7 @@ export async function POST(request) {
     // ── Fetch client for plan info ──────────────────────────────────────────
     const { data: client, error: fetchError } = await supabase
       .from('clients')
-      .select('id, full_name, selected_plan, plan_price, payment_status, last_paid_at')
+      .select('id, full_name, email, selected_plan, plan_price, payment_status, last_paid_at')
       .eq('id', clientId)
       .single();
 
@@ -117,9 +125,36 @@ export async function POST(request) {
       `Manual payment recorded: ${client.full_name} — KES ${amount} on ${paymentDate}`
     );
 
+    // ── Send receipt (non-fatal) — only if the client has a real email ─────
+    let receiptSent = false;
+    if (client.email && !client.email.endsWith('.placeholder')) {
+      try {
+        const plan = getPlanById(client.selected_plan);
+        const planName = plan?.name || client.selected_plan || 'Training';
+        const { ok } = await sendEmail({
+          to: client.email,
+          subject: `AMSC Performance | Payment Confirmed - ${planName}`,
+          html: buildReceiptEmail({
+            fullName: client.full_name,
+            planName,
+            amount: `KES ${Number(amount).toLocaleString()}`,
+            dateStr: parsedDate.toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' }),
+            methodLabel: METHOD_LABELS[method] || 'Payment',
+          }),
+        });
+        if (ok) {
+          receiptSent = true;
+          await supabase.from('payments').update({ receipt_sent: true }).eq('id', payment.id);
+        }
+      } catch (receiptErr) {
+        console.error('add-payment receipt email error (non-fatal):', receiptErr);
+      }
+    }
+
     return NextResponse.json({
       message: 'Payment recorded successfully.',
       payment,
+      receiptSent,
     });
   } catch (err) {
     console.error('add-payment error:', err);
