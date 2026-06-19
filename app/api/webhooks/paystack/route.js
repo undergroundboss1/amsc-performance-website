@@ -3,7 +3,8 @@ import crypto from 'crypto';
 import * as Sentry from '@sentry/nextjs';
 import { getSupabase } from '../../../../lib/supabase';
 import { getPlanById } from '../../../../lib/plans';
-import { sendEmail, buildOnboardingEmail, buildReceiptEmail } from '../../../../lib/email';
+import { sendEmail, buildOnboardingEmail, buildReceiptEmail, buildRenewalFailedEmail } from '../../../../lib/email';
+import { getEffectiveMonthlyRate } from '../../../../lib/plans';
 
 /**
  * POST /api/webhooks/paystack
@@ -63,6 +64,8 @@ export async function POST(request) {
         payment_status: 'paid',
         last_paid_at: paidAt,
         reminders_sent: {}, // reset so next billing cycle gets fresh reminders
+        overdue_ack_note: null, // clear any "continue while overdue" note
+        overdue_ack_at: null,
         notes: `Paystack charge confirmed. Amount: ${amountKes} ${data.currency}. Channel: ${data.channel}. Paid at: ${paidAt}`,
       };
 
@@ -215,17 +218,58 @@ export async function POST(request) {
       };
 
       // Match by subscription code if we have it, otherwise by email
+      let failedClient = null;
       if (subscriptionCode) {
-        await supabase
+        const { data } = await supabase
           .from('clients')
           .update(updateFields)
-          .eq('paystack_subscription_code', subscriptionCode);
+          .eq('paystack_subscription_code', subscriptionCode)
+          .select('id, full_name, email, selected_plan, plan_price, custom_monthly_rate, discount_percent, approval_token')
+          .maybeSingle();
+        failedClient = data;
       } else if (customerEmail) {
-        await supabase
+        const { data } = await supabase
           .from('clients')
           .update(updateFields)
           .eq('email', customerEmail)
-          .eq('payment_provider', 'paystack');
+          .eq('payment_provider', 'paystack')
+          .select('id, full_name, email, selected_plan, plan_price, custom_monthly_rate, discount_percent, approval_token')
+          .maybeSingle();
+        failedClient = data;
+      }
+
+      // Notify the client (with a retry link) and alert admin — non-fatal.
+      if (failedClient && failedClient.email && !failedClient.email.endsWith('.placeholder')) {
+        try {
+          const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://amscperformance.com';
+          const fplan = getPlanById(failedClient.selected_plan);
+          const fplanName = fplan?.name || failedClient.selected_plan || 'Training';
+          const fplanPrice = `KES ${getEffectiveMonthlyRate(failedClient).toLocaleString()}`;
+          const fpayUrl = failedClient.approval_token
+            ? `${siteUrl}/join/pay?token=${failedClient.approval_token}`
+            : null;
+
+          await sendEmail({
+            to: failedClient.email,
+            subject: `AMSC Performance | Payment didn't go through — ${fplanName}`,
+            html: buildRenewalFailedEmail({ fullName: failedClient.full_name, planName: fplanName, planPrice: fplanPrice, paymentUrl: fpayUrl }),
+          });
+
+          await sendEmail({
+            to: 'admin@amscperformance.com',
+            subject: `Renewal failed — ${failedClient.full_name} (${fplanPrice})`,
+            html: `<p style="font-family:sans-serif;font-size:14px;color:#111;">A card renewal failed and the client has been notified.</p>
+                   <ul style="font-family:sans-serif;font-size:14px;color:#111;">
+                     <li><strong>Client:</strong> ${failedClient.full_name}</li>
+                     <li><strong>Plan:</strong> ${fplanName} — ${fplanPrice}</li>
+                     <li><strong>Email:</strong> ${failedClient.email}</li>
+                     <li><strong>Status:</strong> marked overdue</li>
+                   </ul>
+                   <p style="font-family:sans-serif;font-size:14px;color:#111;">They have a retry link. Follow up if it stays unpaid.</p>`,
+          });
+        } catch (failEmailErr) {
+          console.error('Paystack webhook: renewal-failed email error (non-fatal):', failEmailErr);
+        }
       }
 
       console.log(`Paystack renewal failed: subscription=${subscriptionCode}, email=${customerEmail}`);

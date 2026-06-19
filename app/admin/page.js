@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { trainingPlans, getEffectiveMonthlyRate } from '../../lib/plans';
-import { getPaymentTiming } from '../../lib/billing';
+import { getPaymentTiming, getOverdueStatus } from '../../lib/billing';
 
 /**
  * /admin — Internal dashboard for reviewing applications.
@@ -248,13 +248,19 @@ function StatusBadges({ client }) {
   const payColor = paymentStatusColors[client.payment_status];
   const timing = getPaymentTiming(client);
   const isOverdue = timing && timing.daysOverdue > 0 && client.training_status !== 'inactive';
+  const overdue = getOverdueStatus(client);
+  const needsAction = overdue.priority && !overdue.acknowledged;
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
       <span className={`text-[10px] font-display font-bold tracking-widest uppercase px-3 py-1 rounded-full border ${appStatusColors[client.application_status] || appStatusColors.pending_review}`}>
         {client.application_status?.replace('_', ' ')}
       </span>
-      {isOverdue ? (
+      {needsAction ? (
+        <span className="text-[10px] font-display font-bold tracking-widest uppercase px-3 py-1 rounded-full border bg-red-500/25 text-red-300 border-red-500/50">
+          ⚠ Action — {overdue.daysOverdue}d
+        </span>
+      ) : isOverdue ? (
         <span className="text-[10px] font-display font-bold tracking-widest uppercase px-3 py-1 rounded-full border bg-red-500/15 text-red-400 border-red-500/30">
           OVERDUE
         </span>
@@ -485,6 +491,11 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
   const [transitionLoading, setTransitionLoading] = useState(false);
   const [transitionResult, setTransitionResult] = useState(null);
 
+  // Overdue priority "continue with reason" state
+  const [showContinueReason, setShowContinueReason] = useState(false);
+  const [continueReason, setContinueReason] = useState('');
+  const [ackSaving, setAckSaving] = useState(false);
+
   // Training status state
   const [trainingStatus, setTrainingStatus] = useState(client.training_status || 'active');
   const [inactiveReason, setInactiveReason] = useState(client.inactive_reason || '');
@@ -669,6 +680,28 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
       setMetricsResult({ success: false, message: 'Network error.' });
     } finally {
       setMetricsSaving(false);
+    }
+  }
+
+  async function saveOverdueAck(note) {
+    setAckSaving(true);
+    try {
+      const res = await fetch('/api/admin/update-client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminKey}` },
+        body: JSON.stringify({ clientId: client.id, overdueAckNote: note }),
+      });
+      const data = await res.json();
+      if (!res.ok) return;
+      const ackAt = note && note.trim() ? new Date().toISOString() : null;
+      setClient(c => ({ ...c, overdue_ack_note: note && note.trim() ? note.trim() : null, overdue_ack_at: ackAt }));
+      setShowContinueReason(false);
+      setContinueReason('');
+      onUpdate();
+    } catch {
+      /* non-fatal */
+    } finally {
+      setAckSaving(false);
     }
   }
 
@@ -932,6 +965,7 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
 
   const planName = trainingPlans.find(p => p.id === client.selected_plan)?.name || client.selected_plan;
   const timing = getPaymentTiming(client);
+  const overdue = getOverdueStatus(client);
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -949,6 +983,81 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
         </h1>
         <StatusBadges client={client} />
       </div>
+
+      {/* ── PRIORITY: 14+ days overdue, needs an admin decision ──────────── */}
+      {overdue.priority && !overdue.acknowledged && (
+        <div className="bg-red-500/10 border border-red-500/40 rounded-xl p-5 mb-4">
+          <div className="flex items-start gap-3">
+            <span className="text-red-400 text-lg leading-none mt-0.5">⚠</span>
+            <div className="flex-1">
+              <p className="font-display font-bold text-sm tracking-wide uppercase text-red-400 mb-1">
+                Priority — {overdue.daysOverdue} days overdue
+              </p>
+              <p className="text-secondary text-sm font-body mb-4">
+                This active member is more than 2 weeks past due. Decide how to proceed.
+              </p>
+              {!showContinueReason ? (
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => { setShowStatusEditor(true); setStatusResult(null); document.getElementById('training-status-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }}
+                    className="px-4 py-2 text-[11px] font-display font-bold tracking-wider uppercase border border-white/15 rounded-full text-white/80 hover:bg-white/10 transition-colors cursor-pointer"
+                  >
+                    Pause / Mark inactive
+                  </button>
+                  <button
+                    onClick={() => { setShowContinueReason(true); setContinueReason(''); }}
+                    className="px-4 py-2 text-[11px] font-display font-bold tracking-wider uppercase border border-white/15 rounded-full text-white/80 hover:bg-white/10 transition-colors cursor-pointer"
+                  >
+                    Continue with reason
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={continueReason}
+                    onChange={e => setContinueReason(e.target.value)}
+                    placeholder="e.g. promised to pay Friday, on a payment plan…"
+                    className="w-full bg-surface-light border border-white/10 rounded-lg p-3 text-white text-sm font-body focus:border-accent/50 focus:outline-none"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => saveOverdueAck(continueReason)}
+                      disabled={ackSaving || !continueReason.trim()}
+                      className="px-4 py-2 text-[11px] font-display font-bold tracking-wider uppercase bg-accent hover:bg-accent/90 text-white rounded-full transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      {ackSaving ? 'Saving…' : 'Save & continue'}
+                    </button>
+                    <button
+                      onClick={() => { setShowContinueReason(false); setContinueReason(''); }}
+                      className="px-4 py-2 text-[11px] font-display font-bold tracking-wider uppercase border border-white/10 rounded-full text-white/50 hover:text-white transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Acknowledged overdue — continuing with a recorded reason */}
+      {overdue.priority && overdue.acknowledged && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 mb-4">
+          <p className="text-amber-400 text-sm font-body">
+            <span className="font-display font-bold uppercase tracking-wide text-xs">Continuing while overdue ({overdue.daysOverdue}d)</span>
+            {overdue.note ? <> — {overdue.note}</> : null}
+            {overdue.ackAt ? <span className="text-white/40"> · noted {formatDate(new Date(overdue.ackAt))}</span> : null}
+          </p>
+          <button
+            onClick={() => saveOverdueAck('')}
+            className="mt-2 text-[11px] font-display font-bold tracking-wider uppercase text-white/50 hover:text-white transition-colors cursor-pointer underline"
+          >
+            Re-open decision
+          </button>
+        </div>
+      )}
 
       {/* ── CONTACT ──────────────────────────────────────────── */}
       <div className="bg-surface border border-white/5 rounded-xl p-6 mb-4">
@@ -1079,7 +1188,7 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
       </div>
 
       {/* ── TRAINING STATUS ──────────────────────────────────── */}
-      <div className="bg-surface border border-white/5 rounded-xl p-6 mb-4">
+      <div id="training-status-section" className="bg-surface border border-white/5 rounded-xl p-6 mb-4">
         <div className="flex items-center justify-between mb-4">
           <p className="text-[10px] font-display font-bold tracking-widest uppercase text-accent">Training Status</p>
           <button

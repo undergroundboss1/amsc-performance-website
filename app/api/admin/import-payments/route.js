@@ -224,7 +224,7 @@ export async function POST(request) {
         // through the website. Marking them 'paid' via import would block their
         // payment link. Only set 'paid' for historical/walk-in members.
         if (!client.last_paid_at || new Date(parsedDate) > new Date(client.last_paid_at)) {
-          const updatePayload = { last_paid_at: parsedDate, reminders_sent: {} };
+          const updatePayload = { last_paid_at: parsedDate, reminders_sent: {}, overdue_ack_note: null, overdue_ack_at: null };
           if (!client.approval_token) {
             updatePayload.payment_status = 'paid';
           }

@@ -182,11 +182,18 @@ export default function Home() {
           </motion.div>
 
           <motion.h1
-            className="font-display text-white/60 text-sm md:text-base tracking-[0.3em] uppercase mb-12 drop-shadow-lg"
+            className="font-display text-white/60 text-sm md:text-base tracking-[0.3em] uppercase mb-4 drop-shadow-lg"
             variants={heroChild}
           >
             Engineered Athlete Development
           </motion.h1>
+
+          <motion.p
+            className="font-body text-white/35 text-xs md:text-sm tracking-widest uppercase mb-12"
+            variants={heroChild}
+          >
+            Sports Performance Training · Nairobi, Kenya
+          </motion.p>
 
           <motion.div
             className="flex flex-col sm:flex-row gap-4 justify-center"

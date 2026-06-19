@@ -103,6 +103,7 @@ export async function POST(request) {
       .update({
         application_status: 'approved',
         approval_token: approvalToken,
+        approved_at: new Date().toISOString(),
       })
       .eq('id', clientId);
 

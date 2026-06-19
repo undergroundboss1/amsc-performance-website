@@ -138,6 +138,7 @@ export async function POST(request) {
         selected_plan: plan.id,
         plan_price: plan.price,
         application_status: 'approved',   // pre-approved — bypass review
+        approved_at: new Date().toISOString(),
         payment_status: 'pending',
         training_start_date: parsedStartDate,
         discount_percent: parsedDiscount,

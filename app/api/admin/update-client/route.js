@@ -59,7 +59,7 @@ export async function POST(request) {
       clientId,
       trainingStartDate, discountPercent, customMonthlyRate, partnershipNote, amscMetricsAthleteId,
       trainingStatus, inactiveReason, expectedReturnDate, pauseCreditApproved, pauseCreditDays,
-      email, phone, fullName,
+      email, phone, fullName, overdueAckNote,
     } = body;
 
     if (!clientId) {
@@ -97,6 +97,21 @@ export async function POST(request) {
         return NextResponse.json({ error: 'Full name cannot be blank.' }, { status: 400 });
       }
       updates.full_name = n;
+    }
+
+    // ── Overdue acknowledgement ("continue with reason") ──────────────────
+    // A non-empty note records that the admin has decided to keep this overdue
+    // client active for a stated reason — this dismisses the priority prompt
+    // until their next payment (which clears it). Empty/null re-opens the prompt.
+    if ('overdueAckNote' in body) {
+      const note = (overdueAckNote || '').trim();
+      if (note) {
+        updates.overdue_ack_note = note;
+        updates.overdue_ack_at = new Date().toISOString();
+      } else {
+        updates.overdue_ack_note = null;
+        updates.overdue_ack_at = null;
+      }
     }
 
     // ── trainingStartDate ─────────────────────────────────────────────────

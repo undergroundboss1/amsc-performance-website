@@ -118,6 +118,8 @@ export async function POST(request) {
         last_paid_at: parsedDate.toISOString(),
         payment_status: 'paid',
         reminders_sent: {}, // reset so next billing cycle gets fresh reminders
+        overdue_ack_note: null, // clear any "continue while overdue" note
+        overdue_ack_at: null,
       }).eq('id', clientId);
     }
 
