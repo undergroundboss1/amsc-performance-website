@@ -109,6 +109,20 @@ export async function POST(request) {
 
     const supabase = getSupabase();
 
+    // Phone-only clients still need an email (column is NOT NULL). Generate a
+    // placeholder — same convention as imported clients: the card shows "No email
+    // on file" and the admin can add a real one later (then "Switch to online
+    // payments"). Reminders/receipts skip *.placeholder addresses.
+    let finalEmail = trimmedEmail;
+    if (!finalEmail) {
+      const slug = String(fullName).trim().toLowerCase()
+        .replace(/[^a-z0-9]+/g, '.')
+        .replace(/^\.+|\.+$/g, '') || 'client';
+      finalEmail = `${slug}.${Math.random().toString(36).slice(2, 8)}@amscperformance.placeholder`;
+    }
+    // phone is also NOT NULL — fall back to a placeholder for email-only clients.
+    const finalPhone = trimmedPhone || 'no-phone';
+
     // ── Duplicate email check ───────────────────────────────────────────────
     if (trimmedEmail) {
       const { data: existing } = await supabase
@@ -132,8 +146,8 @@ export async function POST(request) {
       .from('clients')
       .insert({
         full_name: String(fullName).trim(),
-        email: trimmedEmail,
-        phone: trimmedPhone,
+        email: finalEmail,
+        phone: finalPhone,
         sport: sport ? String(sport).trim() : null,
         selected_plan: plan.id,
         plan_price: plan.price,
