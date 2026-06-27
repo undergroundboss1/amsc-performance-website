@@ -171,7 +171,7 @@ export async function POST(request) {
       try {
         const { data: client } = await supabase
           .from('clients')
-          .select('full_name, email, selected_plan, payment_provider, onboarding_email_sent_at')
+          .select('full_name, email, selected_plan, plan_price, custom_monthly_rate, discount_percent, payment_provider, onboarding_email_sent_at')
           .eq('payment_reference', reference)
           .single();
 
@@ -185,7 +185,7 @@ export async function POST(request) {
             html: buildOnboardingEmail({
               fullName: client.full_name,
               planName: plan?.name || client.selected_plan,
-              planPrice: plan?.displayPrice || 'KES —',
+              planPrice: `KES ${getEffectiveMonthlyRate(client).toLocaleString()}`,
               paymentMethod: ismpesa ? 'mpesa' : 'card',
             }),
           });

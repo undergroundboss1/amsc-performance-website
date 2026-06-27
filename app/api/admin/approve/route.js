@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { getSupabase } from '../../../../lib/supabase';
-import { getPlanById } from '../../../../lib/plans';
+import { getPlanById, getEffectiveMonthlyRate } from '../../../../lib/plans';
 import { sendEmail, buildApprovalEmail } from '../../../../lib/email';
 
 /**
@@ -68,7 +68,7 @@ export async function POST(request) {
       const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://amsc-performance.vercel.app';
       const plan = getPlanById(client.selected_plan);
       const planName = plan?.name || client.selected_plan;
-      const planPrice = plan?.displayPrice || `KES ${client.plan_price?.toLocaleString()}`;
+      const planPrice = `KES ${getEffectiveMonthlyRate(client).toLocaleString()}`;
       const paymentUrl = `${siteUrl}/join/pay?token=${client.approval_token}`;
 
       let emailSent = false;
@@ -119,7 +119,7 @@ export async function POST(request) {
     const paymentUrl = `${siteUrl}/join/pay?token=${approvalToken}`;
     const plan = getPlanById(client.selected_plan);
     const planName = plan?.name || client.selected_plan;
-    const planPrice = plan?.displayPrice || `KES ${client.plan_price?.toLocaleString()}`;
+    const planPrice = `KES ${getEffectiveMonthlyRate(client).toLocaleString()}`;
 
     // Send approval email automatically via Resend
     let emailSent = false;

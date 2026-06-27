@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { getSupabase } from '../../../../lib/supabase';
-import { getPlanById } from '../../../../lib/plans';
+import { getPlanById, getEffectiveMonthlyRate } from '../../../../lib/plans';
 import { sendEmail, buildPaymentTransitionEmail } from '../../../../lib/email';
 
 /**
@@ -43,7 +43,7 @@ export async function POST(request) {
 
     const { data: client, error: fetchError } = await supabase
       .from('clients')
-      .select('id, full_name, email, selected_plan, plan_price, approval_token, application_status')
+      .select('id, full_name, email, selected_plan, plan_price, custom_monthly_rate, discount_percent, approval_token, application_status')
       .eq('id', clientId)
       .single();
 
@@ -80,7 +80,7 @@ export async function POST(request) {
 
     const plan = getPlanById(client.selected_plan);
     const planName = plan?.name || client.selected_plan;
-    const planPrice = `KES ${(client.plan_price || plan?.price || 0).toLocaleString()}`;
+    const planPrice = `KES ${getEffectiveMonthlyRate(client).toLocaleString()}`;
 
     const { ok, error: emailError } = await sendEmail({
       to: client.email,
