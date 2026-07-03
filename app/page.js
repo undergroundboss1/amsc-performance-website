@@ -59,18 +59,31 @@ const stats = [
 
 const programs = [
   {
-    label: 'DIRECT.',
-    name: 'One-on-One Coaching',
-    desc: 'High-touch coaching for athletes requiring individualized oversight and precision progression.',
+    label: 'EXCLUSIVE.',
+    name: 'Exclusive One-on-One',
+    desc: "The highest level of coaching at AMSC — your coach's time and focus committed entirely to you.",
     features: [
-      'Fully customized training programs.',
-      'Direct coach access and accountability.',
-      'Weekly performance reviews and adjustments.',
-      'Priority scheduling and session flexibility.',
+      "Your coach's undivided time and attention every session.",
+      'Fully individualized programming from your assessment and data.',
+      'Real-time coaching and load adjustment on every rep.',
+      'Priority scheduling and complete session flexibility.',
+    ],
+    price: 'Ksh 50,000',
+    slug: 'exclusive',
+    featured: true,
+  },
+  {
+    label: 'INDIVIDUAL.',
+    name: 'Individualized Coaching',
+    desc: 'A programme built entirely around you, with hands-on coach-led sessions.',
+    features: [
+      'Fully individualized programming based on your assessment.',
+      'Hands-on, coach-led sessions with direct guidance.',
+      'Regular performance reviews and programme adjustments.',
+      'Flexible scheduling within coached training windows.',
     ],
     price: 'Ksh 30,000',
     slug: 'one-on-one',
-    featured: true,
   },
   {
     label: 'STRUCTURED.',
@@ -388,7 +401,7 @@ export default function Home() {
             <div className="card bg-surface-light border border-white/5 rounded-lg p-8 md:p-10 mb-8 max-w-2xl mx-auto relative overflow-visible">
               <div className="absolute -top-3 left-8">
                 <span className="bg-gold text-black font-display text-xs font-bold tracking-widest px-4 py-1.5 rounded-full uppercase">
-                  Recommended
+                  Elite
                 </span>
               </div>
               <span className="text-accent font-display text-xs font-bold tracking-[0.25em]">
@@ -450,34 +463,38 @@ export default function Home() {
             ))}
           </div>
 
-          {/* Youth */}
-          <AnimatedSection delay={0.3}>
-            <div className="card bg-surface-light border border-white/5 rounded-lg p-8 md:p-10 mb-8 max-w-2xl mx-auto">
-              <span className="text-accent font-display text-xs font-bold tracking-[0.25em]">
-                {programs[3].label}
-              </span>
-              <h3 className="font-display font-bold text-2xl tracking-widest mt-2 mb-4">{programs[3].name}</h3>
-              <p className="text-secondary mb-6 text-sm leading-relaxed font-body">{programs[3].desc}</p>
-              <ul className="space-y-3 mb-8">
-                {programs[3].features.map((f) => (
-                  <li key={f} className="flex items-start gap-3 text-secondary text-sm font-body">
-                    <span className="text-accent mt-0.5 font-bold">—</span> {f}
-                  </li>
-                ))}
-              </ul>
-              <div className="border-t border-white/10 pt-6">
-                <p className="font-display text-3xl font-bold text-white">
-                  {programs[3].price}<span className="text-sm font-normal text-secondary"> / month</span>
-                </p>
-                <Link
-                  href={`/join?plan=${programs[3].slug}`}
-                  className="mt-4 block bg-accent text-white text-center py-4 rounded-full font-display font-bold text-sm tracking-wider uppercase hover:bg-accent-dark transition-all duration-200"
-                >
-                  Join Now
-                </Link>
-              </div>
-            </div>
-          </AnimatedSection>
+          {/* Online and Youth */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            {programs.slice(3, 5).map((program, i) => (
+              <AnimatedSection key={program.slug} delay={0.3 + i * 0.1}>
+                <div className="card bg-surface-light border border-white/5 rounded-lg p-8 md:p-10 h-full">
+                  <span className="text-accent font-display text-xs font-bold tracking-[0.25em]">
+                    {program.label}
+                  </span>
+                  <h3 className="font-display font-bold text-2xl tracking-widest mt-2 mb-4">{program.name}</h3>
+                  <p className="text-secondary mb-6 text-sm leading-relaxed font-body">{program.desc}</p>
+                  <ul className="space-y-3 mb-8">
+                    {program.features.map((f) => (
+                      <li key={f} className="flex items-start gap-3 text-secondary text-sm font-body">
+                        <span className="text-accent mt-0.5 font-bold">—</span> {f}
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="border-t border-white/10 pt-6 mt-auto">
+                    <p className="font-display text-3xl font-bold text-white">
+                      {program.price}<span className="text-sm font-normal text-secondary"> / month</span>
+                    </p>
+                    <Link
+                      href={`/join?plan=${program.slug}`}
+                      className="mt-4 block bg-accent text-white text-center py-4 rounded-full font-display font-bold text-sm tracking-wider uppercase hover:bg-accent-dark transition-all duration-200"
+                    >
+                      Join Now
+                    </Link>
+                  </div>
+                </div>
+              </AnimatedSection>
+            ))}
+          </div>
 
           {/* Team Consulting */}
           <AnimatedSection delay={0.4}>

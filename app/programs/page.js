@@ -5,10 +5,19 @@ import AnimatedSection from '../../components/AnimatedSection';
 
 const programs = [
   {
+    slug: 'exclusive',
+    label: 'EXCLUSIVE.',
+    name: 'Exclusive One-on-One',
+    desc: "The highest level of coaching at AMSC — your coach's time and focus committed entirely to you.",
+    price: 'Ksh 50,000',
+    image: '/images/program-one-on-one.jpg',
+    imagePosition: 'object-center',
+  },
+  {
     slug: 'one-on-one',
-    label: 'DIRECT.',
-    name: 'One-on-One Coaching',
-    desc: 'High-touch coaching for athletes requiring individualized oversight and precision progression.',
+    label: 'INDIVIDUAL.',
+    name: 'Individualized Coaching',
+    desc: 'A programme built entirely around you, with hands-on coach-led sessions.',
     price: 'Ksh 30,000',
     image: '/images/program-one-on-one.jpg',
     imagePosition: 'object-center',

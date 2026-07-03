@@ -127,7 +127,13 @@ export default function RootLayout({ children }) {
                 itemListElement: [
                   {
                     '@type': 'Offer',
-                    itemOffered: { '@type': 'Service', name: 'One-on-One Sports Performance Coaching', description: 'Private strength & conditioning sessions tailored to elite athletes in Nairobi.' },
+                    itemOffered: { '@type': 'Service', name: 'Exclusive One-on-One Coaching', description: 'The highest level of coaching at AMSC — a coach fully dedicated to one athlete, in Nairobi.' },
+                    price: '50000',
+                    priceCurrency: 'KES',
+                  },
+                  {
+                    '@type': 'Offer',
+                    itemOffered: { '@type': 'Service', name: 'Individualized Coaching', description: 'An individualized programme with hands-on coach-led sessions for athletes in Nairobi.' },
                     price: '30000',
                     priceCurrency: 'KES',
                   },

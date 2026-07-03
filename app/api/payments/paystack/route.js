@@ -68,7 +68,11 @@ export async function POST(request) {
     // on the standard rate. Custom/discounted clients are charged the correct
     // amount as a one-time card payment; their renewal is handled by the monthly
     // reminder system (same as M-Pesa clients).
-    const isStandardRate = !client.custom_monthly_rate && !(Number(client.discount_percent) > 0);
+    // Attach the recurring subscription plan code only for standard-rate clients
+    // AND only when the plan actually has a Paystack code configured. A tier without
+    // a code (or a custom/discounted rate) is charged one-time and renewed by reminders.
+    const isStandardRate =
+      !client.custom_monthly_rate && !(Number(client.discount_percent) > 0) && !!plan.paystackPlanCode;
 
     const response = await fetch('https://api.paystack.co/transaction/initialize', {
       method: 'POST',

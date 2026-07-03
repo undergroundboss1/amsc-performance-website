@@ -39,7 +39,8 @@ export default function Footer() {
           <div>
             <h4 className="font-display font-bold text-sm uppercase tracking-[0.2em] mb-5 text-white">Programs</h4>
             <div className="space-y-3">
-              <Link href="/programs/one-on-one" className="block text-secondary text-sm hover:text-accent transition-colors font-body">1-on-1 Coaching</Link>
+              <Link href="/programs/exclusive" className="block text-secondary text-sm hover:text-accent transition-colors font-body">Exclusive One-on-One</Link>
+              <Link href="/programs/one-on-one" className="block text-secondary text-sm hover:text-accent transition-colors font-body">Individualized Coaching</Link>
               <Link href="/programs/online" className="block text-secondary text-sm hover:text-accent transition-colors font-body">Online Training</Link>
               <Link href="/programs/consulting" className="block text-secondary text-sm hover:text-accent transition-colors font-body">Team Consulting</Link>
               <Link href="/programs/group" className="block text-secondary text-sm hover:text-accent transition-colors font-body">Group Training</Link>
