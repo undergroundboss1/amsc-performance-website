@@ -44,7 +44,7 @@ const programs = [
     slug: 'youth',
     label: 'DEVELOPMENTAL.',
     name: 'Youth Athletic Development',
-    desc: 'Building athletic foundations for young athletes aged 10–17.',
+    desc: 'Building athletic foundations for young athletes aged 10–15.',
     price: 'Ksh 10,000',
     image: '/images/youth-athlete-lunge.jpg',
     imagePosition: 'object-center',
