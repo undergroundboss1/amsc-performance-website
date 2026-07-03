@@ -139,6 +139,8 @@ const heroChild = {
 export default function Home() {
   const heroRef = useRef(null);
   const heroBgRef = useRef(null);
+  const exclusiveRef = useRef(null);
+  const exclusiveGlowRef = useRef(null);
   const shouldReduceMotion = useReducedMotion();
 
   // Parallax: hero background drifts up slowly on scroll
@@ -157,6 +159,22 @@ export default function Home() {
       });
     },
     { scope: heroRef }
+  );
+
+  // Premium glow: subtle gold→red halo breathing behind the Exclusive card
+  useGSAP(
+    () => {
+      if (shouldReduceMotion || !exclusiveGlowRef.current) return;
+      gsap.to(exclusiveGlowRef.current, {
+        opacity: 0.9,
+        scale: 1.04,
+        duration: 2.8,
+        ease: 'sine.inOut',
+        repeat: -1,
+        yoyo: true,
+      });
+    },
+    { scope: exclusiveRef, dependencies: [shouldReduceMotion] }
   );
 
   return (
@@ -396,9 +414,22 @@ export default function Home() {
         </AnimatedSection>
 
         <div className="max-w-7xl mx-auto">
-          {/* One-on-One - Featured */}
+          {/* Exclusive - Featured (premium glow) */}
           <AnimatedSection delay={0.1}>
-            <div className="card bg-surface-light border border-white/5 rounded-lg p-8 md:p-10 mb-8 max-w-2xl mx-auto relative overflow-visible">
+            <div ref={exclusiveRef} className="relative max-w-2xl mx-auto mb-8">
+              {/* Breathing gold→red halo behind the card */}
+              <div
+                ref={exclusiveGlowRef}
+                aria-hidden="true"
+                className="pointer-events-none absolute -inset-1 rounded-xl opacity-60"
+                style={{
+                  background:
+                    'radial-gradient(120% 130% at 50% 0%, rgba(202,138,4,0.55) 0%, rgba(166,10,8,0.28) 42%, rgba(166,10,8,0) 72%)',
+                  filter: 'blur(22px)',
+                  willChange: 'opacity, transform',
+                }}
+              />
+              <div className="card bg-surface-light border border-gold/25 rounded-lg p-8 md:p-10 relative overflow-visible">
               <div className="absolute -top-3 left-8">
                 <span className="bg-gold text-black font-display text-xs font-bold tracking-widest px-4 py-1.5 rounded-full uppercase">
                   Elite
@@ -426,6 +457,7 @@ export default function Home() {
                 >
                   Join Now
                 </Link>
+              </div>
               </div>
             </div>
           </AnimatedSection>
