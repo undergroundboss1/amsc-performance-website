@@ -429,12 +429,7 @@ export default function Home() {
                   willChange: 'opacity, transform',
                 }}
               />
-              <div className="card bg-surface-light border border-gold/25 rounded-lg p-8 md:p-10 relative overflow-visible">
-              <div className="absolute -top-3 left-8">
-                <span className="bg-gold text-black font-display text-xs font-bold tracking-widest px-4 py-1.5 rounded-full uppercase">
-                  Elite
-                </span>
-              </div>
+              <div className="card bg-surface-light border border-gold/25 rounded-lg p-8 md:p-10 relative">
               <span className="text-accent font-display text-xs font-bold tracking-[0.25em]">
                 {programs[0].label}
               </span>
@@ -458,6 +453,12 @@ export default function Home() {
                   Join Now
                 </Link>
               </div>
+              </div>
+              {/* Elite badge — on the wrapper so the card's overflow-hidden can't clip it */}
+              <div className="absolute -top-2 left-8 z-10">
+                <span className="bg-gold text-black font-display text-xs font-bold tracking-widest px-4 py-1.5 rounded-full uppercase">
+                  Elite
+                </span>
               </div>
             </div>
           </AnimatedSection>
