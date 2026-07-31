@@ -20,7 +20,8 @@ function BillingScheduleCard({ reference }) {
       .catch(() => setLoading(false));
   }, [reference]);
 
-  if (loading || !info) return null;
+  // nextDueDate is null for clients on a training pause — no schedule to show.
+  if (loading || !info || !info.nextDueDate) return null;
 
   return (
     <div className="bg-surface border border-white/5 rounded-xl p-8 text-left mb-8">
@@ -53,8 +54,9 @@ function BillingScheduleCard({ reference }) {
 
       {/* Explanation */}
       <p className="text-white/50 font-body text-sm leading-relaxed mb-4">
-        Your billing runs on a <strong className="text-white/80">30-day cycle from your training start date</strong>.
-        {' '}This means your next charge is 30 days after you started — not 30 days after you paid.
+        Your billing runs <strong className="text-white/80">monthly from your training start date</strong>, on the
+        {' '}same day each month.
+        {' '}This means your next charge is one month after you started — not one month after you paid.
         {' '}If you paid late, your next due date will be sooner than you might expect.
       </p>
 

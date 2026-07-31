@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabase } from '../../../lib/supabase';
-import { getPlanById } from '../../../lib/plans';
+import { getPlanById, getEffectiveMonthlyRate } from '../../../lib/plans';
+import { getPaymentTiming } from '../../../lib/billing';
 
 /**
  * GET /api/billing-info?reference=xxx
@@ -11,12 +12,16 @@ import { getPlanById } from '../../../lib/plans';
  *
  * Used by the payment success page to show the client their billing schedule.
  *
+ * The due date comes from getPaymentTiming() in lib/billing.js — the same
+ * function the admin dashboard, the reminder cron and the pay-link gate use —
+ * so the date shown here is always the date the rest of the system will act on.
+ *
  * Returns:
- *   { clientName, planName, billingAnchor, nextDueDate, cycleDay,
+ *   { clientName, planName, billingAnchor, nextDueDate,
  *     isAutoRenew, currency, displayPrice }
  *
- * cycleDay: day-of-month the client is billed (e.g. 1 if anchor is May 1)
- * nextDueDate: ISO string of the next billing date (30 days from anchor)
+ * nextDueDate is null for clients on a training pause (their billing clock is
+ * suppressed); the success page hides the schedule card in that case.
  */
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
@@ -31,7 +36,7 @@ export async function GET(request) {
 
     const { data: client, error } = await supabase
       .from('clients')
-      .select('id, full_name, selected_plan, plan_price, training_start_date, last_paid_at, payment_provider, custom_monthly_rate, discount_percent')
+      .select('id, full_name, selected_plan, plan_price, training_start_date, last_paid_at, payment_provider, custom_monthly_rate, discount_percent, training_status, pause_credit_days')
       .eq('payment_reference', reference)
       .single();
 
@@ -39,38 +44,23 @@ export async function GET(request) {
       return NextResponse.json({ error: 'Client not found.' }, { status: 404 });
     }
 
-    // Billing anchor: training_start_date if set, else last_paid_at
-    const anchor = client.training_start_date || client.last_paid_at;
-    if (!anchor) {
+    const timing = getPaymentTiming(client);
+
+    // Nothing to bill yet — no payment on record and no training start date.
+    if (!timing) {
       return NextResponse.json({ error: 'No billing anchor available yet.' }, { status: 404 });
     }
 
-    const anchorDate = new Date(anchor);
-
-    // Compute next billing date: advance in 30-day cycles from anchor until future
-    const now = new Date();
-    const MS_PER_CYCLE = 30 * 24 * 60 * 60 * 1000;
-    const msElapsed = now - anchorDate;
-    const cyclesCompleted = Math.max(0, Math.floor(msElapsed / MS_PER_CYCLE));
-    const nextDue = new Date(anchorDate.getTime() + (cyclesCompleted + 1) * MS_PER_CYCLE);
-
-    // Effective price
-    let displayPrice = client.plan_price;
-    if (client.custom_monthly_rate) displayPrice = client.custom_monthly_rate;
-    else if (Number(client.discount_percent) > 0)
-      displayPrice = Math.round(client.plan_price * (1 - Number(client.discount_percent) / 100));
-
     const plan = getPlanById(client.selected_plan);
-    const isAutoRenew = client.payment_provider === 'paystack';
 
     return NextResponse.json({
       clientName: client.full_name,
       planName: plan?.name || client.selected_plan,
-      billingAnchor: anchorDate.toISOString(),
-      nextDueDate: nextDue.toISOString(),
-      isAutoRenew,
+      billingAnchor: timing.paused ? null : timing.cycleAnchor.toISOString(),
+      nextDueDate: timing.paused ? null : timing.nextDue.toISOString(),
+      isAutoRenew: client.payment_provider === 'paystack',
       currency: 'KES',
-      displayPrice: Number(displayPrice),
+      displayPrice: getEffectiveMonthlyRate(client),
     });
   } catch (err) {
     console.error('billing-info error:', err);
