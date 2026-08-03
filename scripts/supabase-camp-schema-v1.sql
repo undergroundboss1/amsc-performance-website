@@ -79,11 +79,12 @@ CREATE TABLE IF NOT EXISTS camp.registrations (
 
   medical_notes            TEXT,
 
-  -- Consent — stored as explicit, separate, auditable flags. This camp is
-  -- used for marketing/case-study content, so consent_media is not boilerplate
-  -- and must never be folded into a generic notes field.
-  consent_participation    BOOLEAN NOT NULL,
-  consent_media            BOOLEAN NOT NULL,
+  -- Consent — one blanket agreement covering participation, medical risk,
+  -- AMSC Combine testing/AMSC Metrics recording, and photo/video use in
+  -- marketing. A single checkbox by design (see camp registration wording),
+  -- not folded into a generic notes field — the point is that it's an
+  -- explicit, auditable field of its own, not that it's split by topic.
+  consent_agreed           BOOLEAN NOT NULL,
   consent_text_version     TEXT NOT NULL,   -- snapshot of the exact wording agreed to
 
   -- Registration / payment status

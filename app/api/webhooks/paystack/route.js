@@ -1,10 +1,18 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import * as Sentry from '@sentry/nextjs';
-import { getSupabase } from '../../../../lib/supabase';
+import { getSupabase, getCampSupabase } from '../../../../lib/supabase';
 import { getPlanById } from '../../../../lib/plans';
-import { sendEmail, buildOnboardingEmail, buildReceiptEmail, buildRenewalFailedEmail } from '../../../../lib/email';
+import {
+  sendEmail,
+  buildOnboardingEmail,
+  buildReceiptEmail,
+  buildRenewalFailedEmail,
+  buildCampConfirmationEmail,
+  buildCampWaitlistEmail,
+} from '../../../../lib/email';
 import { getEffectiveMonthlyRate } from '../../../../lib/plans';
+import { getCampContentBySlug } from '../../../../lib/camps';
 
 /**
  * POST /api/webhooks/paystack
@@ -25,6 +33,136 @@ import { getEffectiveMonthlyRate } from '../../../../lib/plans';
  * Webhook URL: https://amscperformance.com/api/webhooks/paystack
  * Events: Collections (charge.success)
  */
+
+/**
+ * Camp registration branch of the Paystack webhook.
+ *
+ * Routed here by metadata.type === 'camp_registration' (set at checkout
+ * init in app/api/camp/pay/route.js), BEFORE the client-billing logic below
+ * runs — this branch only ever touches the 'camp' schema, never
+ * public.clients / public.payments.
+ *
+ * Camps are one-time payments with no Paystack plan code attached, so only
+ * charge.success is relevant here; invoice.payment_failed and
+ * subscription.disable never fire for a camp registration.
+ */
+async function handleCampCharge(payload) {
+  const { event, data } = payload;
+
+  if (event !== 'charge.success') {
+    console.log(`Paystack webhook (camp): ignored event ${event}`);
+    return NextResponse.json({ message: 'Ignored camp event' }, { status: 200 });
+  }
+
+  const registrationId = data?.metadata?.registration_id;
+  const reference = data.reference;
+
+  if (!registrationId) {
+    console.warn('Paystack webhook (camp): charge.success missing metadata.registration_id', reference);
+    return NextResponse.json({ message: 'No registration_id in metadata' }, { status: 200 });
+  }
+
+  const campSupabase = getCampSupabase();
+  const amountKes = data.amount / 100;
+  const paymentMethod = data.channel === 'mobile_money' ? 'paystack_mpesa' : 'paystack_card';
+
+  // Atomic slot assignment — locks the camp row so concurrent confirmations
+  // for the same camp serialize here. Idempotent against webhook retries.
+  let result;
+  try {
+    const { data: rpcResult, error: rpcError } = await campSupabase.rpc('confirm_registration', {
+      p_registration_id: registrationId,
+      p_payment_reference: reference,
+      p_payment_method: paymentMethod,
+      p_amount_paid: amountKes,
+    });
+    if (rpcError) throw rpcError;
+    result = rpcResult; // 'paid' | 'waitlist'
+  } catch (err) {
+    console.error('Paystack webhook (camp): confirm_registration error:', err);
+    Sentry.captureException(err, { tags: { webhook: 'paystack-camp' } });
+    // Return 200 so Paystack does not retry on our bug — matches the
+    // client-billing branch's own error-handling convention below.
+    return NextResponse.json({ message: 'Error confirming camp registration' }, { status: 200 });
+  }
+
+  console.log(`Paystack webhook (camp): registration ${registrationId} -> ${result}`);
+
+  // ── Notify the guardian (and admin, if waitlisted) — non-fatal ──────────
+  try {
+    const { data: registration } = await campSupabase
+      .from('registrations')
+      .select('id, athlete_name, guardian_name, guardian_email, access_token, camp_id')
+      .eq('id', registrationId)
+      .single();
+
+    if (!registration) {
+      console.error('Paystack webhook (camp): registration not found after confirm', registrationId);
+      return NextResponse.json({ message: 'Camp webhook processed' }, { status: 200 });
+    }
+
+    if (registration.guardian_email && !registration.guardian_email.endsWith('.placeholder')) {
+      const { data: campRow } = await campSupabase
+        .from('camps')
+        .select('slug, name, starts_on, ends_on, venue, price_kes')
+        .eq('id', registration.camp_id)
+        .single();
+
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://amscperformance.com';
+      const campContent = campRow ? getCampContentBySlug(campRow.slug) : null;
+
+      if (result === 'paid') {
+        const materialsUrl = `${siteUrl}/camps/${campRow.slug}/materials?token=${registration.access_token}`;
+        await sendEmail({
+          to: registration.guardian_email,
+          subject: `You're in — ${campRow.name}`,
+          html: buildCampConfirmationEmail({
+            athleteName: registration.athlete_name,
+            guardianName: registration.guardian_name,
+            campName: campRow.name,
+            campDatesDisplay: campContent?.datesDisplay || `${campRow.starts_on} – ${campRow.ends_on}`,
+            venue: campRow.venue,
+            priceDisplay: `KES ${Number(campRow.price_kes).toLocaleString()}`,
+            materialsUrl,
+          }),
+        });
+      } else {
+        await sendEmail({
+          to: registration.guardian_email,
+          subject: `You're on the waitlist — ${campRow.name}`,
+          html: buildCampWaitlistEmail({
+            athleteName: registration.athlete_name,
+            guardianName: registration.guardian_name,
+            campName: campRow.name,
+          }),
+        });
+
+        // A full-camp payment that had to be waitlisted needs a human
+        // decision (refund or promote) — same admin-alert pattern used
+        // elsewhere in this webhook for the client-billing branch.
+        await sendEmail({
+          to: 'admin@amscperformance.com',
+          subject: `Camp waitlist — ${registration.athlete_name} (${campRow.name})`,
+          html: `<p style="font-family:sans-serif;font-size:14px;color:#111;">A camp payment was captured but the camp was already at capacity.</p>
+                 <ul style="font-family:sans-serif;font-size:14px;color:#111;">
+                   <li><strong>Athlete:</strong> ${registration.athlete_name}</li>
+                   <li><strong>Camp:</strong> ${campRow.name}</li>
+                   <li><strong>Guardian email:</strong> ${registration.guardian_email}</li>
+                   <li><strong>Amount:</strong> KES ${amountKes.toLocaleString()}</li>
+                 </ul>
+                 <p style="font-family:sans-serif;font-size:14px;color:#111;">Refund or promote from the admin Camp tab.</p>`,
+        });
+      }
+    }
+  } catch (emailErr) {
+    // Never let email failure break the webhook response — matches the
+    // client-billing branch's existing non-fatal email pattern below.
+    console.error('Paystack webhook (camp): email error (non-fatal):', emailErr);
+  }
+
+  return NextResponse.json({ message: 'Camp webhook processed' }, { status: 200 });
+}
+
 export async function POST(request) {
   try {
     const rawBody = await request.text();
@@ -47,6 +185,15 @@ export async function POST(request) {
 
     const payload = JSON.parse(rawBody);
     const { event, data } = payload;
+
+    // Camp registrations are routed to their own branch — entirely separate
+    // schema, separate confirmation logic, never touches public.clients or
+    // public.payments. Checked before the client-billing supabase client is
+    // even created below.
+    if (data?.metadata?.type === 'camp_registration') {
+      return handleCampCharge(payload);
+    }
+
     const supabase = getSupabase();
 
     // ── Successful charge (first payment or monthly renewal) ──────────────
