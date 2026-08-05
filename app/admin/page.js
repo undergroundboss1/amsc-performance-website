@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { trainingPlans, getEffectiveMonthlyRate } from '../../lib/plans';
 import { getPaymentTiming, getOverdueStatus } from '../../lib/billing';
+import CampView from '../../components/admin/CampView';
+import AuditLogView from '../../components/admin/AuditLogView';
 
 /**
  * /admin — Internal dashboard for reviewing applications.
@@ -3492,10 +3494,10 @@ export default function AdminPage() {
               </button>
             </div>
 
-            {/* Top-level tab switcher: Applications | Revenue */}
+            {/* Top-level tab switcher: Applications | Revenue | Arrears | Attendance | Camp | Activity */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '20px', borderBottom: '1px solid #222', paddingBottom: '0' }}>
-              <div style={{ display: 'flex', gap: '4px' }}>
-                {[['applications', 'Applications'], ['revenue', 'Revenue'], ['arrears', 'Arrears'], ['attendance', 'Attendance']].map(([key, label]) => (
+              <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                {[['applications', 'Applications'], ['revenue', 'Revenue'], ['arrears', 'Arrears'], ['attendance', 'Attendance'], ['camp', 'Camp'], ['audit', 'Activity']].map(([key, label]) => (
                   <button
                     key={key}
                     onClick={() => setActiveTab(key)}
@@ -3519,12 +3521,16 @@ export default function AdminPage() {
                   </button>
                 ))}
               </div>
-              <button
-                onClick={() => setShowAddClient(true)}
-                style={{ background: '#a60a08', color: '#f5f5f8', border: 'none', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: 700, letterSpacing: '0.06em', cursor: 'pointer', marginBottom: '4px' }}
-              >
-                + Add Client
-              </button>
+              {/* Only meaningful on the Applications tab — creates a regular
+                  AMSC client, not a camp registrant. */}
+              {activeTab === 'applications' && (
+                <button
+                  onClick={() => setShowAddClient(true)}
+                  style={{ background: '#a60a08', color: '#f5f5f8', border: 'none', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: 700, letterSpacing: '0.06em', cursor: 'pointer', marginBottom: '4px' }}
+                >
+                  + Add Client
+                </button>
+              )}
             </div>
 
             {/* Revenue tab */}
@@ -3535,6 +3541,16 @@ export default function AdminPage() {
             {/* Arrears tab */}
             {activeTab === 'arrears' && (
               <ArrearsView adminKey={adminKey} />
+            )}
+
+            {/* Camp tab */}
+            {activeTab === 'camp' && (
+              <CampView adminKey={adminKey} />
+            )}
+
+            {/* Activity (audit log) tab */}
+            {activeTab === 'audit' && (
+              <AuditLogView adminKey={adminKey} />
             )}
 
             {/* Attendance tab */}

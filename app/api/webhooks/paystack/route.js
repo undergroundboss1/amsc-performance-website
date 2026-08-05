@@ -8,11 +8,9 @@ import {
   buildOnboardingEmail,
   buildReceiptEmail,
   buildRenewalFailedEmail,
-  buildCampConfirmationEmail,
-  buildCampWaitlistEmail,
 } from '../../../../lib/email';
 import { getEffectiveMonthlyRate } from '../../../../lib/plans';
-import { getCampContentBySlug } from '../../../../lib/camps';
+import { sendCampOutcomeEmail } from '../../../../lib/camp-notifications';
 
 /**
  * POST /api/webhooks/paystack
@@ -88,72 +86,11 @@ async function handleCampCharge(payload) {
 
   console.log(`Paystack webhook (camp): registration ${registrationId} -> ${result}`);
 
-  // ── Notify the guardian (and admin, if waitlisted) — non-fatal ──────────
+  // Notify the guardian (and admin, if waitlisted) — non-fatal. Shared with
+  // the admin mark-paid/promote routes via lib/camp-notifications.js, so
+  // there's exactly one place deciding what the guardian is told.
   try {
-    const { data: registration } = await campSupabase
-      .from('registrations')
-      .select('id, athlete_name, guardian_name, guardian_email, access_token, camp_id')
-      .eq('id', registrationId)
-      .single();
-
-    if (!registration) {
-      console.error('Paystack webhook (camp): registration not found after confirm', registrationId);
-      return NextResponse.json({ message: 'Camp webhook processed' }, { status: 200 });
-    }
-
-    if (registration.guardian_email && !registration.guardian_email.endsWith('.placeholder')) {
-      const { data: campRow } = await campSupabase
-        .from('camps')
-        .select('slug, name, starts_on, ends_on, venue, price_kes')
-        .eq('id', registration.camp_id)
-        .single();
-
-      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://amscperformance.com';
-      const campContent = campRow ? getCampContentBySlug(campRow.slug) : null;
-
-      if (result === 'paid') {
-        const materialsUrl = `${siteUrl}/camps/${campRow.slug}/materials?token=${registration.access_token}`;
-        await sendEmail({
-          to: registration.guardian_email,
-          subject: `You're in — ${campRow.name}`,
-          html: buildCampConfirmationEmail({
-            athleteName: registration.athlete_name,
-            guardianName: registration.guardian_name,
-            campName: campRow.name,
-            campDatesDisplay: campContent?.datesDisplay || `${campRow.starts_on} – ${campRow.ends_on}`,
-            venue: campRow.venue,
-            priceDisplay: `KES ${Number(campRow.price_kes).toLocaleString()}`,
-            materialsUrl,
-          }),
-        });
-      } else {
-        await sendEmail({
-          to: registration.guardian_email,
-          subject: `You're on the waitlist — ${campRow.name}`,
-          html: buildCampWaitlistEmail({
-            athleteName: registration.athlete_name,
-            guardianName: registration.guardian_name,
-            campName: campRow.name,
-          }),
-        });
-
-        // A full-camp payment that had to be waitlisted needs a human
-        // decision (refund or promote) — same admin-alert pattern used
-        // elsewhere in this webhook for the client-billing branch.
-        await sendEmail({
-          to: 'admin@amscperformance.com',
-          subject: `Camp waitlist — ${registration.athlete_name} (${campRow.name})`,
-          html: `<p style="font-family:sans-serif;font-size:14px;color:#111;">A camp payment was captured but the camp was already at capacity.</p>
-                 <ul style="font-family:sans-serif;font-size:14px;color:#111;">
-                   <li><strong>Athlete:</strong> ${registration.athlete_name}</li>
-                   <li><strong>Camp:</strong> ${campRow.name}</li>
-                   <li><strong>Guardian email:</strong> ${registration.guardian_email}</li>
-                   <li><strong>Amount:</strong> KES ${amountKes.toLocaleString()}</li>
-                 </ul>
-                 <p style="font-family:sans-serif;font-size:14px;color:#111;">Refund or promote from the admin Camp tab.</p>`,
-        });
-      }
-    }
+    await sendCampOutcomeEmail(registrationId, result, { amountPaid: amountKes });
   } catch (emailErr) {
     // Never let email failure break the webhook response — matches the
     // client-billing branch's existing non-fatal email pattern below.
