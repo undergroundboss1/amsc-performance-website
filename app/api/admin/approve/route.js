@@ -3,6 +3,8 @@ import crypto from 'crypto';
 import { getSupabase } from '../../../../lib/supabase';
 import { getPlanById, getEffectiveMonthlyRate } from '../../../../lib/plans';
 import { sendEmail, buildApprovalEmail } from '../../../../lib/email';
+import { getAdminActor } from '../../../../lib/admin-auth';
+import { logAdminAction } from '../../../../lib/admin-audit';
 
 /**
  * POST /api/admin/approve
@@ -30,17 +32,8 @@ import { sendEmail, buildApprovalEmail } from '../../../../lib/email';
 export async function POST(request) {
   try {
     // Verify admin authorization
-    const authHeader = request.headers.get('authorization');
-    const adminSecret = process.env.ADMIN_SECRET_KEY;
-
-    if (!adminSecret) {
-      return NextResponse.json(
-        { error: 'Admin secret key not configured. Add ADMIN_SECRET_KEY to .env.local' },
-        { status: 500 }
-      );
-    }
-
-    if (!authHeader || authHeader !== `Bearer ${adminSecret}`) {
+    const actor = getAdminActor(request);
+    if (!actor) {
       return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
     }
 
@@ -80,6 +73,11 @@ export async function POST(request) {
         });
         emailSent = ok;
       }
+
+      await logAdminAction({
+        actor, action: 'client.approve', domain: 'client', resourceId: clientId,
+        detail: { resent: true, emailSent },
+      });
 
       return NextResponse.json({
         message: 'Client was already approved. Payment link resent.',
@@ -139,6 +137,11 @@ export async function POST(request) {
         console.error('Approval email failed:', emailError);
       }
     }
+
+    await logAdminAction({
+      actor, action: 'client.approve', domain: 'client', resourceId: clientId,
+      detail: { resent: false, emailSent },
+    });
 
     return NextResponse.json({
       message: 'Client approved successfully.',

@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { getSupabase } from '../../../../lib/supabase';
 import { getPlanById } from '../../../../lib/plans';
 import { sendEmail, buildReceiptEmail } from '../../../../lib/email';
+import { getAdminActor } from '../../../../lib/admin-auth';
+import { logAdminAction } from '../../../../lib/admin-audit';
 
 const METHOD_LABELS = {
   manual_cash: 'Cash',
@@ -28,8 +30,8 @@ const METHOD_LABELS = {
  */
 export async function POST(request) {
   // ── Auth ───────────────────────────────────────────────────────────────────
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader || authHeader !== `Bearer ${process.env.ADMIN_SECRET_KEY}`) {
+  const actor = getAdminActor(request);
+  if (!actor) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   }
 
@@ -126,6 +128,11 @@ export async function POST(request) {
     console.log(
       `Manual payment recorded: ${client.full_name} — KES ${amount} on ${paymentDate}`
     );
+
+    await logAdminAction({
+      actor, action: 'client.add_payment', domain: 'client', resourceId: payment.id,
+      detail: { clientId, amount: Number(amount), paymentMethod: method, paymentDate },
+    });
 
     // ── Send receipt (non-fatal) — only if the client has a real email ─────
     let receiptSent = false;

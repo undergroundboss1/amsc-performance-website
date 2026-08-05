@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getSupabase } from '../../../../lib/supabase';
+import { getAdminActor } from '../../../../lib/admin-auth';
 
 export async function GET(request) {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader || authHeader !== `Bearer ${process.env.ADMIN_SECRET_KEY}`) {
+  if (!getAdminActor(request)) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   }
   try {

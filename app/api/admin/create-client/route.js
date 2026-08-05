@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getSupabase } from '../../../../lib/supabase';
 import { getPlanById } from '../../../../lib/plans';
+import { getAdminActor } from '../../../../lib/admin-auth';
+import { logAdminAction } from '../../../../lib/admin-audit';
 
 /**
  * POST /api/admin/create-client
@@ -27,8 +29,8 @@ import { getPlanById } from '../../../../lib/plans';
  */
 export async function POST(request) {
   // ── Auth ───────────────────────────────────────────────────────────────────
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader || authHeader !== `Bearer ${process.env.ADMIN_SECRET_KEY}`) {
+  const actor = getAdminActor(request);
+  if (!actor) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   }
 
@@ -169,6 +171,11 @@ export async function POST(request) {
     }
 
     console.log(`Manual client created: ${client.full_name} (${client.id})`);
+
+    await logAdminAction({
+      actor, action: 'client.create_client', domain: 'client', resourceId: client.id,
+      detail: { fullName: client.full_name, selectedPlan: client.selected_plan },
+    });
 
     return NextResponse.json({
       message: 'Client created.',
