@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSupabase } from '../../../../lib/supabase';
+import { getAdminActor } from '../../../../lib/admin-auth';
 
 /**
  * GET /api/admin/arrears
@@ -11,8 +12,7 @@ import { getSupabase } from '../../../../lib/supabase';
  * Returns: { clients: Array<ClientArrears>, totals: { count, totalOwed } }
  */
 export async function GET(request) {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader || authHeader !== `Bearer ${process.env.ADMIN_SECRET_KEY}`) {
+  if (!getAdminActor(request)) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   }
 

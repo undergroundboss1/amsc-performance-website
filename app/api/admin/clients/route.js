@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSupabase } from '../../../../lib/supabase';
+import { getAdminActor } from '../../../../lib/admin-auth';
 
 /**
  * GET /api/admin/clients?status=pending_review
@@ -9,10 +10,7 @@ import { getSupabase } from '../../../../lib/supabase';
  */
 export async function GET(request) {
   try {
-    const authHeader = request.headers.get('authorization');
-    const adminSecret = process.env.ADMIN_SECRET_KEY;
-
-    if (!adminSecret || !authHeader || authHeader !== `Bearer ${adminSecret}`) {
+    if (!getAdminActor(request)) {
       return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
     }
 

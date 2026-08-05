@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabase } from '../../../../lib/supabase';
+import { getAdminActor } from '../../../../lib/admin-auth';
+import { logAdminAction } from '../../../../lib/admin-audit';
 
 /**
  * POST /api/admin/update-client
@@ -48,8 +50,8 @@ import { getSupabase } from '../../../../lib/supabase';
  */
 export async function POST(request) {
   // ── Auth ───────────────────────────────────────────────────────────────────
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader || authHeader !== `Bearer ${process.env.ADMIN_SECRET_KEY}`) {
+  const actor = getAdminActor(request);
+  if (!actor) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   }
 
@@ -256,6 +258,11 @@ export async function POST(request) {
       console.error('update-client error:', error);
       return NextResponse.json({ error: 'Failed to update client.' }, { status: 500 });
     }
+
+    await logAdminAction({
+      actor, action: 'client.update_client', domain: 'client', resourceId: clientId,
+      detail: updates,
+    });
 
     return NextResponse.json({ message: 'Client updated.' });
   } catch (err) {

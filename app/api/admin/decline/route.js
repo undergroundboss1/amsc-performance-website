@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabase } from '../../../../lib/supabase';
+import { getAdminActor } from '../../../../lib/admin-auth';
+import { logAdminAction } from '../../../../lib/admin-audit';
 
 /**
  * POST /api/admin/decline
@@ -10,10 +12,8 @@ import { getSupabase } from '../../../../lib/supabase';
  */
 export async function POST(request) {
   try {
-    const authHeader = request.headers.get('authorization');
-    const adminSecret = process.env.ADMIN_SECRET_KEY;
-
-    if (!adminSecret || !authHeader || authHeader !== `Bearer ${adminSecret}`) {
+    const actor = getAdminActor(request);
+    if (!actor) {
       return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
     }
 
@@ -34,6 +34,8 @@ export async function POST(request) {
       console.error('Decline error:', error);
       return NextResponse.json({ error: 'Failed to decline application.' }, { status: 500 });
     }
+
+    await logAdminAction({ actor, action: 'client.decline', domain: 'client', resourceId: clientId });
 
     return NextResponse.json({ message: 'Application declined.' });
   } catch (err) {

@@ -17,6 +17,8 @@ const LIMITS = {
   '/api/clients':            { max: 5,  windowMs: 60_000 },
   '/api/reports':            { max: 10, windowMs: 60_000 },
   '/api/payments/paystack':  { max: 5,  windowMs: 60_000 },
+  '/api/camp/register':      { max: 5,  windowMs: 60_000 },
+  '/api/camp/pay':           { max: 5,  windowMs: 60_000 },
 };
 
 function getClientIp(request) {
@@ -83,6 +85,8 @@ export const config = {
     '/api/clients',
     '/api/reports',
     '/api/payments/paystack',
+    '/api/camp/register',
+    '/api/camp/pay',
     // Note: /monitoring is intentionally excluded — it's the Sentry tunnel route
   ],
 };

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getSupabase } from '../../../../lib/supabase';
 import { resyncLastPaidAt } from '../../../../lib/payments-server';
+import { getAdminActor } from '../../../../lib/admin-auth';
+import { logAdminAction } from '../../../../lib/admin-audit';
 
 /**
  * POST /api/admin/update-payment
@@ -20,8 +22,8 @@ import { resyncLastPaidAt } from '../../../../lib/payments-server';
  * Returns: { message, payment, lastPaidAt }
  */
 export async function POST(request) {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader || authHeader !== `Bearer ${process.env.ADMIN_SECRET_KEY}`) {
+  const actor = getAdminActor(request);
+  if (!actor) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   }
 
@@ -92,6 +94,11 @@ export async function POST(request) {
     }
 
     const { lastPaidAt } = await resyncLastPaidAt(supabase, payment.client_id);
+
+    await logAdminAction({
+      actor, action: 'client.update_payment', domain: 'client', resourceId: paymentId,
+      detail: updates,
+    });
 
     return NextResponse.json({ message: 'Payment updated.', payment, lastPaidAt });
   } catch (err) {

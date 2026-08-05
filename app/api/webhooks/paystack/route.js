@@ -1,10 +1,16 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import * as Sentry from '@sentry/nextjs';
-import { getSupabase } from '../../../../lib/supabase';
+import { getSupabase, getCampSupabase } from '../../../../lib/supabase';
 import { getPlanById } from '../../../../lib/plans';
-import { sendEmail, buildOnboardingEmail, buildReceiptEmail, buildRenewalFailedEmail } from '../../../../lib/email';
+import {
+  sendEmail,
+  buildOnboardingEmail,
+  buildReceiptEmail,
+  buildRenewalFailedEmail,
+} from '../../../../lib/email';
 import { getEffectiveMonthlyRate } from '../../../../lib/plans';
+import { sendCampOutcomeEmail } from '../../../../lib/camp-notifications';
 
 /**
  * POST /api/webhooks/paystack
@@ -25,6 +31,75 @@ import { getEffectiveMonthlyRate } from '../../../../lib/plans';
  * Webhook URL: https://amscperformance.com/api/webhooks/paystack
  * Events: Collections (charge.success)
  */
+
+/**
+ * Camp registration branch of the Paystack webhook.
+ *
+ * Routed here by metadata.type === 'camp_registration' (set at checkout
+ * init in app/api/camp/pay/route.js), BEFORE the client-billing logic below
+ * runs — this branch only ever touches the 'camp' schema, never
+ * public.clients / public.payments.
+ *
+ * Camps are one-time payments with no Paystack plan code attached, so only
+ * charge.success is relevant here; invoice.payment_failed and
+ * subscription.disable never fire for a camp registration.
+ */
+async function handleCampCharge(payload) {
+  const { event, data } = payload;
+
+  if (event !== 'charge.success') {
+    console.log(`Paystack webhook (camp): ignored event ${event}`);
+    return NextResponse.json({ message: 'Ignored camp event' }, { status: 200 });
+  }
+
+  const registrationId = data?.metadata?.registration_id;
+  const reference = data.reference;
+
+  if (!registrationId) {
+    console.warn('Paystack webhook (camp): charge.success missing metadata.registration_id', reference);
+    return NextResponse.json({ message: 'No registration_id in metadata' }, { status: 200 });
+  }
+
+  const campSupabase = getCampSupabase();
+  const amountKes = data.amount / 100;
+  const paymentMethod = data.channel === 'mobile_money' ? 'paystack_mpesa' : 'paystack_card';
+
+  // Atomic slot assignment — locks the camp row so concurrent confirmations
+  // for the same camp serialize here. Idempotent against webhook retries.
+  let result;
+  try {
+    const { data: rpcResult, error: rpcError } = await campSupabase.rpc('confirm_registration', {
+      p_registration_id: registrationId,
+      p_payment_reference: reference,
+      p_payment_method: paymentMethod,
+      p_amount_paid: amountKes,
+    });
+    if (rpcError) throw rpcError;
+    result = rpcResult; // 'paid' | 'waitlist'
+  } catch (err) {
+    console.error('Paystack webhook (camp): confirm_registration error:', err);
+    Sentry.captureException(err, { tags: { webhook: 'paystack-camp' } });
+    // Return 200 so Paystack does not retry on our bug — matches the
+    // client-billing branch's own error-handling convention below.
+    return NextResponse.json({ message: 'Error confirming camp registration' }, { status: 200 });
+  }
+
+  console.log(`Paystack webhook (camp): registration ${registrationId} -> ${result}`);
+
+  // Notify the guardian (and admin, if waitlisted) — non-fatal. Shared with
+  // the admin mark-paid/promote routes via lib/camp-notifications.js, so
+  // there's exactly one place deciding what the guardian is told.
+  try {
+    await sendCampOutcomeEmail(registrationId, result, { amountPaid: amountKes });
+  } catch (emailErr) {
+    // Never let email failure break the webhook response — matches the
+    // client-billing branch's existing non-fatal email pattern below.
+    console.error('Paystack webhook (camp): email error (non-fatal):', emailErr);
+  }
+
+  return NextResponse.json({ message: 'Camp webhook processed' }, { status: 200 });
+}
+
 export async function POST(request) {
   try {
     const rawBody = await request.text();
@@ -47,6 +122,15 @@ export async function POST(request) {
 
     const payload = JSON.parse(rawBody);
     const { event, data } = payload;
+
+    // Camp registrations are routed to their own branch — entirely separate
+    // schema, separate confirmation logic, never touches public.clients or
+    // public.payments. Checked before the client-billing supabase client is
+    // even created below.
+    if (data?.metadata?.type === 'camp_registration') {
+      return handleCampCharge(payload);
+    }
+
     const supabase = getSupabase();
 
     // ── Successful charge (first payment or monthly renewal) ──────────────

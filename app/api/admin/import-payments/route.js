@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getSupabase } from '../../../../lib/supabase';
 import { trainingPlans } from '../../../../lib/plans';
+import { getAdminActor } from '../../../../lib/admin-auth';
+import { logAdminAction } from '../../../../lib/admin-audit';
 
 /**
  * POST /api/admin/import-payments
@@ -81,8 +83,8 @@ function parseDate(raw) {
 
 export async function POST(request) {
   // ── Auth ───────────────────────────────────────────────────────────────────
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader || authHeader !== `Bearer ${process.env.ADMIN_SECRET_KEY}`) {
+  const actor = getAdminActor(request);
+  if (!actor) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   }
 
@@ -242,6 +244,11 @@ export async function POST(request) {
     }
 
     console.log(`Import complete: ${imported} payments, ${clientsCreated} new clients, ${errors.length} errors`);
+
+    await logAdminAction({
+      actor, action: 'client.import_payments', domain: 'client',
+      detail: { rowCount: rows.length, imported, clientsCreated, errorCount: errors.length },
+    });
 
     return NextResponse.json({ imported, clientsCreated, errors });
   } catch (err) {

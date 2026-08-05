@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getSupabase } from '../../../../lib/supabase';
 import { getPlanById } from '../../../../lib/plans';
+import { getAdminActor } from '../../../../lib/admin-auth';
+import { logAdminAction } from '../../../../lib/admin-audit';
 
 /**
  * POST /api/admin/change-plan
@@ -15,13 +17,13 @@ import { getPlanById } from '../../../../lib/plans';
  *                            Admin must send the new link to the client.
  *
  * SECURITY:
- * - Protected by ADMIN_SECRET_KEY (same pattern as all admin routes)
+ * - Protected by any of the three shared admin keys (see lib/admin-auth.js)
  * - Plan price always fetched server-side from plans.js — never trusted from client
  */
 export async function POST(request) {
   // ── Auth ───────────────────────────────────────────────────────────────────
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader || authHeader !== `Bearer ${process.env.ADMIN_SECRET_KEY}`) {
+  const actor = getAdminActor(request);
+  if (!actor) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   }
 
@@ -73,6 +75,11 @@ export async function POST(request) {
 
       if (updateError) throw updateError;
 
+      await logAdminAction({
+        actor, action: 'client.change_plan', domain: 'client', resourceId: clientId,
+        detail: { from: client.selected_plan, to: newPlan.id, provider: 'none' },
+      });
+
       return NextResponse.json({
         message: 'Plan updated.',
         newPlan: { id: newPlan.id, name: newPlan.name, displayPrice: newPlan.displayPrice },
@@ -87,6 +94,11 @@ export async function POST(request) {
         .eq('id', clientId);
 
       if (updateError) throw updateError;
+
+      await logAdminAction({
+        actor, action: 'client.change_plan', domain: 'client', resourceId: clientId,
+        detail: { from: client.selected_plan, to: newPlan.id, provider: 'paystack_mpesa' },
+      });
 
       return NextResponse.json({
         message: 'Plan updated. New amount takes effect on their next M-Pesa payment.',
@@ -186,6 +198,11 @@ export async function POST(request) {
           })
           .eq('id', clientId);
 
+        await logAdminAction({
+          actor, action: 'client.change_plan', domain: 'client', resourceId: clientId,
+          detail: { from: client.selected_plan, to: newPlan.id, provider: 'paystack', paymentLinkGenerated: false },
+        });
+
         return NextResponse.json({
           message: 'Plan updated, but failed to generate payment link. Generate manually.',
           newPlan: { id: newPlan.id, name: newPlan.name, displayPrice: newPlan.displayPrice },
@@ -207,6 +224,11 @@ export async function POST(request) {
         .eq('id', clientId);
 
       if (updateError) throw updateError;
+
+      await logAdminAction({
+        actor, action: 'client.change_plan', domain: 'client', resourceId: clientId,
+        detail: { from: client.selected_plan, to: newPlan.id, provider: 'paystack', paymentLinkGenerated: true },
+      });
 
       return NextResponse.json({
         message: 'Plan updated. Send the new payment link to the client.',

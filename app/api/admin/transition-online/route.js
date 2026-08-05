@@ -3,6 +3,8 @@ import crypto from 'crypto';
 import { getSupabase } from '../../../../lib/supabase';
 import { getPlanById, getEffectiveMonthlyRate } from '../../../../lib/plans';
 import { sendEmail, buildPaymentTransitionEmail } from '../../../../lib/email';
+import { getAdminActor } from '../../../../lib/admin-auth';
+import { logAdminAction } from '../../../../lib/admin-audit';
 
 /**
  * POST /api/admin/transition-online
@@ -26,8 +28,8 @@ import { sendEmail, buildPaymentTransitionEmail } from '../../../../lib/email';
  * Returns: { message, paymentUrl, emailSent }
  */
 export async function POST(request) {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader || authHeader !== `Bearer ${process.env.ADMIN_SECRET_KEY}`) {
+  const actor = getAdminActor(request);
+  if (!actor) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   }
 
@@ -95,6 +97,10 @@ export async function POST(request) {
         { status: 502 }
       );
     }
+
+    await logAdminAction({
+      actor, action: 'client.transition_online', domain: 'client', resourceId: clientId,
+    });
 
     return NextResponse.json({
       message: `Transition email sent to ${client.email}.`,

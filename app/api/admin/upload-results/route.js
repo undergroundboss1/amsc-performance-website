@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabase } from '../../../../lib/supabase';
+import { getAdminActor } from '../../../../lib/admin-auth';
+import { logAdminAction } from '../../../../lib/admin-audit';
 
 /**
  * POST /api/admin/upload-results
@@ -7,13 +9,12 @@ import { getSupabase } from '../../../../lib/supabase';
  * Receives an Excel file (base64) + event date from the admin upload UI.
  * Calls the Python batch processor, generates access codes, inserts into athlete_results.
  *
- * Auth: Bearer token matching ADMIN_SECRET_KEY env var.
+ * Auth: any of the three shared admin keys (see lib/admin-auth.js).
  */
 export async function POST(request) {
   // Auth check
-  const auth = request.headers.get('authorization') || '';
-  const token = auth.replace('Bearer ', '').trim();
-  if (!token || token !== process.env.ADMIN_SECRET_KEY) {
+  const actor = getAdminActor(request);
+  if (!actor) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -148,6 +149,11 @@ export async function POST(request) {
         { status: 500 }
       );
     }
+
+    await logAdminAction({
+      actor, action: 'client.upload_results', domain: 'client',
+      detail: { eventDate, inserted: inserted.length },
+    });
 
     return NextResponse.json({
       inserted: inserted.length,

@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabase } from '../../../../lib/supabase';
+import { getAdminActor } from '../../../../lib/admin-auth';
+import { logAdminAction } from '../../../../lib/admin-audit';
 
 /**
  * GET /api/admin/attendance?month=YYYY-MM
@@ -30,14 +32,10 @@ import { getSupabase } from '../../../../lib/supabase';
 function unauthorized() {
   return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
 }
-function checkAuth(request) {
-  const h = request.headers.get('authorization');
-  return h && h === `Bearer ${process.env.ADMIN_SECRET_KEY}`;
-}
 
 // ── GET ────────────────────────────────────────────────────────────────────────
 export async function GET(request) {
-  if (!checkAuth(request)) return unauthorized();
+  if (!getAdminActor(request)) return unauthorized();
 
   const { searchParams } = new URL(request.url);
   const month = searchParams.get('month'); // e.g. '2026-04'
@@ -85,7 +83,8 @@ export async function GET(request) {
 
 // ── POST ───────────────────────────────────────────────────────────────────────
 export async function POST(request) {
-  if (!checkAuth(request)) return unauthorized();
+  const actor = getAdminActor(request);
+  if (!actor) return unauthorized();
 
   try {
     const { clientId, sessionDate, attended, notes } = await request.json();
@@ -121,6 +120,11 @@ export async function POST(request) {
 
     if (error) throw error;
 
+    await logAdminAction({
+      actor, action: 'client.mark_attendance', domain: 'client', resourceId: clientId,
+      detail: { sessionDate, attended: attended !== false },
+    });
+
     return NextResponse.json({ record: data });
   } catch (err) {
     console.error('attendance POST error:', err);
@@ -130,7 +134,8 @@ export async function POST(request) {
 
 // ── DELETE ─────────────────────────────────────────────────────────────────────
 export async function DELETE(request) {
-  if (!checkAuth(request)) return unauthorized();
+  const actor = getAdminActor(request);
+  if (!actor) return unauthorized();
 
   try {
     const { clientId, sessionDate } = await request.json();
@@ -151,6 +156,11 @@ export async function DELETE(request) {
       .eq('session_date', sessionDate);
 
     if (error) throw error;
+
+    await logAdminAction({
+      actor, action: 'client.clear_attendance', domain: 'client', resourceId: clientId,
+      detail: { sessionDate },
+    });
 
     return NextResponse.json({ message: 'Record deleted.' });
   } catch (err) {
