@@ -218,18 +218,28 @@ export default function CampView({ adminKey }) {
   const [registrations, setRegistrations] = useState([]);
   const [loadingCamps, setLoadingCamps] = useState(true);
   const [loadingRegs, setLoadingRegs] = useState(false);
+  // A failed load must not render as "no camps"/"no registrants" — on this
+  // screen an empty list and a broken request look identical to the reader,
+  // and silently showing the reassuring one hides real faults.
+  const [loadError, setLoadError] = useState('');
 
   async function fetchCamps() {
     setLoadingCamps(true);
+    setLoadError('');
     try {
       const res = await fetch('/api/admin/camp/camps', { headers: { Authorization: `Bearer ${adminKey}` } });
       const json = await res.json();
-      if (res.ok) {
-        setCamps(json.camps || []);
-        if (!selectedCampId && json.camps?.length > 0) setSelectedCampId(json.camps[0].id);
+      if (!res.ok) {
+        setCamps([]);
+        setLoadError(json.error || `Failed to load camps (HTTP ${res.status}).`);
+        return;
       }
+      setCamps(json.camps || []);
+      if (!selectedCampId && json.camps?.length > 0) setSelectedCampId(json.camps[0].id);
     } catch (e) {
       console.error('CampView fetch camps error', e);
+      setCamps([]);
+      setLoadError('Network error while loading camps.');
     } finally {
       setLoadingCamps(false);
     }
@@ -238,14 +248,22 @@ export default function CampView({ adminKey }) {
   async function fetchRegistrations() {
     if (!selectedCampId) return;
     setLoadingRegs(true);
+    setLoadError('');
     try {
       const res = await fetch(`/api/admin/camp/registrations?campId=${selectedCampId}`, {
         headers: { Authorization: `Bearer ${adminKey}` },
       });
       const json = await res.json();
-      if (res.ok) setRegistrations(json.registrations || []);
+      if (!res.ok) {
+        setRegistrations([]);
+        setLoadError(json.error || `Failed to load registrations (HTTP ${res.status}).`);
+        return;
+      }
+      setRegistrations(json.registrations || []);
     } catch (e) {
       console.error('CampView fetch registrations error', e);
+      setRegistrations([]);
+      setLoadError('Network error while loading registrations.');
     } finally {
       setLoadingRegs(false);
     }
@@ -268,6 +286,21 @@ export default function CampView({ adminKey }) {
 
   if (loadingCamps) {
     return <p style={{ color: '#555', fontSize: '13px' }}>Loading camps…</p>;
+  }
+
+  if (loadError && camps.length === 0) {
+    return (
+      <div style={{ textAlign: 'center', padding: '40px 20px', background: '#1a1a1a', border: '1px solid #3a1f1f', borderRadius: '10px' }}>
+        <p style={{ color: '#fca5a5', fontSize: '13px', margin: '0 0 4px' }}>Couldn{'’'}t load camp data.</p>
+        <p style={{ color: '#555', fontSize: '12px', margin: '0 0 14px' }}>{loadError}</p>
+        <button
+          onClick={refreshAll}
+          style={{ background: 'transparent', border: '1px solid #333', color: '#d3d3d3', borderRadius: '6px', padding: '5px 12px', fontSize: '12px', cursor: 'pointer' }}
+        >
+          Try again
+        </button>
+      </div>
+    );
   }
 
   if (camps.length === 0) {
@@ -298,6 +331,12 @@ export default function CampView({ adminKey }) {
           ↻ Refresh
         </button>
       </div>
+
+      {/* Camps loaded but the registrant list failed — say so rather than
+          letting the sections below read as an empty camp. */}
+      {loadError && (
+        <p style={{ color: '#fca5a5', fontSize: '12px', marginBottom: '12px' }}>{loadError}</p>
+      )}
 
       {selectedCamp && (
         <>

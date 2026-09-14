@@ -26,11 +26,13 @@ function formatDateTime(iso) {
 export default function AuditLogView({ adminKey }) {
   const [actions, setActions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [actorFilter, setActorFilter] = useState('');
   const [domainFilter, setDomainFilter] = useState('');
 
   async function fetchLog() {
     setLoading(true);
+    setError('');
     try {
       const params = new URLSearchParams();
       if (actorFilter) params.set('actor', actorFilter);
@@ -39,9 +41,21 @@ export default function AuditLogView({ adminKey }) {
         headers: { Authorization: `Bearer ${adminKey}` },
       });
       const json = await res.json();
-      if (res.ok) setActions(json.actions || []);
+      // A failed fetch must never fall through to the empty state below.
+      // "No activity recorded yet" is a factual claim about the log; showing
+      // it when the request actually failed hides a broken audit trail behind
+      // a reassuring message — which is exactly how a permissions fault here
+      // went unnoticed once already.
+      if (!res.ok) {
+        setActions([]);
+        setError(json.error || `Failed to load activity (HTTP ${res.status}).`);
+        return;
+      }
+      setActions(json.actions || []);
     } catch (e) {
       console.error('AuditLogView fetch error', e);
+      setActions([]);
+      setError('Network error while loading activity.');
     } finally {
       setLoading(false);
     }
@@ -83,6 +97,17 @@ export default function AuditLogView({ adminKey }) {
       {/* Log */}
       {loading ? (
         <p style={{ color: '#555', fontSize: '13px' }}>Loading activity…</p>
+      ) : error ? (
+        <div style={{ textAlign: 'center', padding: '40px 20px', background: '#1a1a1a', border: '1px solid #3a1f1f', borderRadius: '10px' }}>
+          <p style={{ color: '#fca5a5', fontSize: '13px', margin: '0 0 4px' }}>Couldn{'’'}t load the activity log.</p>
+          <p style={{ color: '#555', fontSize: '12px', margin: '0 0 14px' }}>{error}</p>
+          <button
+            onClick={fetchLog}
+            style={{ background: 'transparent', border: '1px solid #333', color: '#d3d3d3', borderRadius: '6px', padding: '5px 12px', fontSize: '12px', cursor: 'pointer' }}
+          >
+            Try again
+          </button>
+        </div>
       ) : actions.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px 20px', background: '#1a1a1a', border: '1px solid #222', borderRadius: '10px' }}>
           <p style={{ color: '#555', fontSize: '13px', margin: 0 }}>No activity recorded yet.</p>
