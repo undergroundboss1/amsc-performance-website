@@ -19,6 +19,9 @@ const LIMITS = {
   '/api/payments/paystack':  { max: 5,  windowMs: 60_000 },
   '/api/camp/register':      { max: 5,  windowMs: 60_000 },
   '/api/camp/pay':           { max: 5,  windowMs: 60_000 },
+  // Admin-only, but still capped: working through a list of debtors is a
+  // legitimate burst, while anything past this is a stuck retry loop.
+  '/api/admin/send-payment-email': { max: 20, windowMs: 60_000 },
 };
 
 function getClientIp(request) {

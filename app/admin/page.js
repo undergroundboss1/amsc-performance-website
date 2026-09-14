@@ -435,7 +435,7 @@ function ApplicationCard({ client, adminKey, onUpdate, onClick }) {
           disabled={loading}
           className="w-full bg-surface-light border border-white/10 text-white font-display font-bold text-sm tracking-wider uppercase py-3 rounded-full hover:border-green-500/30 transition-all cursor-pointer disabled:opacity-50"
         >
-          {loading ? 'Loading...' : 'Get Payment Link Again'}
+          {loading ? 'Loading...' : 'Get Link + Email Client'}
         </button>
       )}
 
@@ -453,6 +453,13 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
   const [client, setClient] = useState(initialClient);
   const [actionLoading, setActionLoading] = useState(false);
   const [paymentLink, setPaymentLink] = useState(null);
+
+  // Manual payment emails. The automated path (approval email on approve,
+  // then the daily reminder cron) covers the normal case; these cover the
+  // ones it can't — "I never got the link", or a client who has drifted past
+  // their due date and needs a nudge now rather than at the next cron run.
+  const [emailSending, setEmailSending] = useState('');
+  const [emailResult, setEmailResult] = useState(null);
 
   const [showPricingEditor, setShowPricingEditor] = useState(false);
   const [pricingForm, setPricingForm] = useState({
@@ -635,6 +642,32 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
       alert('Network error. Please try again.');
     } finally {
       setActionLoading(false);
+    }
+  }
+
+  async function sendPaymentEmail(type) {
+    const label = type === 'request' ? 'payment request' : 'payment reminder';
+    // These go to a real customer the moment they're clicked and can't be
+    // pulled back, so confirm rather than fire on a stray tap.
+    if (!window.confirm(`Send a ${label} email to ${client.email}?`)) return;
+
+    setEmailSending(type);
+    setEmailResult(null);
+    try {
+      const res = await fetch('/api/admin/send-payment-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminKey}` },
+        body: JSON.stringify({ clientId: client.id, type }),
+      });
+      const data = await res.json();
+      setEmailResult({
+        ok: res.ok,
+        message: res.ok ? data.message : (data.error || 'Failed to send.'),
+      });
+    } catch {
+      setEmailResult({ ok: false, message: 'Network error. Please try again.' });
+    } finally {
+      setEmailSending('');
     }
   }
 
@@ -1785,15 +1818,59 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
             disabled={actionLoading}
             className="w-full bg-surface-light border border-white/10 text-white font-display font-bold text-sm tracking-wider uppercase py-3 rounded-full hover:border-green-500/30 transition-all cursor-pointer disabled:opacity-50"
           >
-            {actionLoading ? 'Loading...' : 'Get Payment Link Again'}
+            {actionLoading ? 'Loading...' : 'Get Link + Email Client'}
           </button>
         )}
 
         {client.application_status === 'approved' && client.payment_status === 'paid' && (
           <p className="text-white/30 text-sm font-body text-center py-2">
-            Client is active and paid. No actions required.
+            Client is active and paid.
           </p>
         )}
+
+        {/* Manual payment emails — available for any approved client, paid or
+            not: a reminder is exactly what an up-to-date member needs when
+            their next renewal comes round or they drift past it. */}
+        {client.application_status === 'approved' && (() => {
+          const hasRealEmail = Boolean(client.email) && !client.email.endsWith('.placeholder');
+          const busy = Boolean(emailSending);
+
+          return (
+            <div className="mt-4 pt-4 border-t border-white/5">
+              <p className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 mb-1">
+                Send Email
+              </p>
+              <p className="text-white/30 text-xs font-body mb-3">
+                {hasRealEmail
+                  ? <>Sends to {client.email} immediately. Automatic reminders still go out 5 days before, 1 day before and on the due date — sending here doesn&apos;t replace them.</>
+                  : 'No real email address on file for this client, so nothing can be sent.'}
+              </p>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => sendPaymentEmail('request')}
+                  disabled={!hasRealEmail || busy}
+                  className="flex-1 bg-surface-light border border-white/10 text-white font-display font-bold text-xs tracking-wider uppercase py-3 rounded-full hover:border-accent/40 transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  {emailSending === 'request' ? 'Sending...' : 'Payment Request'}
+                </button>
+                <button
+                  onClick={() => sendPaymentEmail('reminder')}
+                  disabled={!hasRealEmail || busy}
+                  className="flex-1 bg-surface-light border border-white/10 text-white font-display font-bold text-xs tracking-wider uppercase py-3 rounded-full hover:border-accent/40 transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  {emailSending === 'reminder' ? 'Sending...' : 'Payment Reminder'}
+                </button>
+              </div>
+
+              {emailResult && (
+                <p className={`text-xs font-body mt-3 ${emailResult.ok ? 'text-green-400' : 'text-red-400'}`}>
+                  {emailResult.ok ? '✓ ' : ''}{emailResult.message}
+                </p>
+              )}
+            </div>
+          );
+        })()}
 
         {client.application_status === 'declined' && (
           <p className="text-white/30 text-sm font-body text-center py-2">
@@ -2818,6 +2895,37 @@ function ArrearsView({ adminKey }) {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
 
+  // Per-row reminder sending. Keyed by client id so working down the list
+  // doesn't put every row into a loading state at once, and so the result of
+  // one send stays attached to the row it belongs to.
+  const [remindingId, setRemindingId] = useState('');
+  const [remindResults, setRemindResults] = useState({});
+
+  async function sendReminder(client) {
+    if (!window.confirm(`Send a payment reminder to ${client.full_name} (${client.email})?`)) return;
+
+    setRemindingId(client.id);
+    try {
+      const res = await fetch('/api/admin/send-payment-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminKey}` },
+        body: JSON.stringify({ clientId: client.id, type: 'reminder' }),
+      });
+      const data = await res.json();
+      setRemindResults(prev => ({
+        ...prev,
+        [client.id]: { ok: res.ok, message: res.ok ? 'Sent' : (data.error || 'Failed') },
+      }));
+    } catch {
+      setRemindResults(prev => ({
+        ...prev,
+        [client.id]: { ok: false, message: 'Network error' },
+      }));
+    } finally {
+      setRemindingId('');
+    }
+  }
+
   async function fetchArrears() {
     setLoading(true);
     try {
@@ -2925,7 +3033,7 @@ function ArrearsView({ adminKey }) {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid #222' }}>
-                {['Client', 'Plan', 'Rate / mo', 'Enrolled', 'Paid', 'Owed', 'Amount Owed', 'Last Paid', 'Status'].map(h => (
+                {['Client', 'Plan', 'Rate / mo', 'Enrolled', 'Paid', 'Owed', 'Amount Owed', 'Last Paid', 'Status', 'Remind'].map(h => (
                   <th key={h} style={{ textAlign: 'left', padding: '8px 10px', color: '#555', fontFamily: 'Oswald, sans-serif', fontWeight: 700, fontSize: '11px', letterSpacing: '0.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -2968,6 +3076,38 @@ function ArrearsView({ adminKey }) {
                         {c.payment_status || 'unknown'}
                       </span>
                     </td>
+                    <td style={{ padding: '9px 10px', whiteSpace: 'nowrap' }}>
+                      {(() => {
+                        const result = remindResults[c.id];
+                        const hasRealEmail = Boolean(c.email) && !c.email.endsWith('.placeholder');
+
+                        if (!hasRealEmail) {
+                          return <span style={{ color: '#555', fontSize: '11px' }}>No email</span>;
+                        }
+                        if (result?.ok) {
+                          return <span style={{ color: '#22c55e', fontSize: '11px', fontWeight: 600 }}>✓ Sent</span>;
+                        }
+                        return (
+                          <>
+                            <button
+                              onClick={() => sendReminder(c)}
+                              disabled={remindingId === c.id}
+                              style={{
+                                background: 'transparent', border: '1px solid #333', color: '#d3d3d3',
+                                borderRadius: '6px', padding: '4px 10px', fontSize: '11px', fontWeight: 600,
+                                cursor: remindingId === c.id ? 'not-allowed' : 'pointer',
+                                opacity: remindingId === c.id ? 0.4 : 1,
+                              }}
+                            >
+                              {remindingId === c.id ? 'Sending…' : 'Remind'}
+                            </button>
+                            {result && !result.ok && (
+                              <span style={{ color: '#fca5a5', fontSize: '11px', marginLeft: '6px' }}>{result.message}</span>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </td>
                   </tr>
                 );
               })}
@@ -2981,7 +3121,8 @@ function ArrearsView({ adminKey }) {
                 <td style={{ padding: '9px 10px', color: '#a60a08', fontWeight: 700, whiteSpace: 'nowrap' }}>
                   {formatKES(filtered.reduce((s, c) => s + Number(c.amount_owed || 0), 0))}
                 </td>
-                <td colSpan={2} />
+                {/* Last Paid + Status + Remind */}
+                <td colSpan={3} />
               </tr>
             </tfoot>
           </table>
