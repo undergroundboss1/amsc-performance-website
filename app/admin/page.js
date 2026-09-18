@@ -5,6 +5,15 @@ import { trainingPlans, getEffectiveMonthlyRate } from '../../lib/plans';
 import { getPaymentTiming, getOverdueStatus } from '../../lib/billing';
 import CampView from '../../components/admin/CampView';
 import AuditLogView from '../../components/admin/AuditLogView';
+import FollowUpsView from '../../components/admin/FollowUpsView';
+import {
+  COMMS_STATUSES,
+  COMMS_STATUS_LABELS,
+  ESCALATION_REASONS,
+  ESCALATION_REASON_LABELS,
+  ACTOR_LABELS as COMMS_ACTOR_LABELS,
+  timeAgo,
+} from '../../lib/client-comms';
 
 /**
  * /admin — Internal dashboard for reviewing applications.
@@ -520,6 +529,14 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
   const [statusResult, setStatusResult] = useState(null);
   const [showStatusEditor, setShowStatusEditor] = useState(false);
 
+  // Conversation state — mirrors the WhatsApp label this client's chat carries
+  const [showCommsEditor, setShowCommsEditor] = useState(false);
+  const [commsStatus, setCommsStatus] = useState(client.comms_status || '');
+  const [commsReason, setCommsReason] = useState(client.escalation_reason || 'other');
+  const [commsNote, setCommsNote] = useState(client.comms_note || '');
+  const [commsSaving, setCommsSaving] = useState(false);
+  const [commsResult, setCommsResult] = useState(null);
+
   async function handleSavePricing(e) {
     e.preventDefault();
     setPricingLoading(true);
@@ -827,6 +844,39 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
       setStatusResult({ success: false, message: 'Network error.' });
     } finally {
       setStatusSaving(false);
+    }
+  }
+
+  async function saveComms(overrides = {}) {
+    const nextStatus = 'status' in overrides ? overrides.status : commsStatus;
+    setCommsSaving(true);
+    setCommsResult(null);
+    try {
+      const res = await fetch('/api/admin/client-comms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminKey}` },
+        body: JSON.stringify({
+          clientId: client.id,
+          commsStatus: nextStatus || null,
+          commsNote: 'note' in overrides ? overrides.note : commsNote,
+          escalationReason: nextStatus === 'escalated' ? commsReason : null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setCommsResult({ success: false, message: data.error || 'Failed to save.' });
+        return;
+      }
+      setClient(c => ({ ...c, ...data.updates }));
+      setCommsStatus(data.updates.comms_status || '');
+      setCommsNote(data.updates.comms_note || '');
+      setShowCommsEditor(false);
+      setCommsResult({ success: true, message: 'Conversation updated.' });
+      onUpdate();
+    } catch {
+      setCommsResult({ success: false, message: 'Network error.' });
+    } finally {
+      setCommsSaving(false);
     }
   }
 
@@ -1220,6 +1270,142 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
               </p>
             )}
           </div>
+        )}
+      </div>
+
+      {/* ── CONVERSATION ─────────────────────────────────────── */}
+      <div className="bg-surface border border-white/5 rounded-xl p-6 mb-4">
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-[10px] font-display font-bold tracking-widest uppercase text-accent">Conversation</p>
+          <button
+            onClick={() => {
+              // Cancelling discards the draft — reset from the saved record so
+              // an abandoned edit can't leak into the next quick action.
+              if (showCommsEditor) {
+                setCommsStatus(client.comms_status || '');
+                setCommsReason(client.escalation_reason || 'other');
+                setCommsNote(client.comms_note || '');
+              }
+              setShowCommsEditor(s => !s);
+              setCommsResult(null);
+            }}
+            className="px-3 py-1.5 text-[10px] font-display font-bold tracking-wider uppercase border border-white/10 rounded-full text-white/60 hover:border-white/30 hover:text-white transition-colors cursor-pointer"
+          >
+            {showCommsEditor ? 'Cancel' : client.comms_status ? 'Edit' : 'Add to queue'}
+          </button>
+        </div>
+
+        {!showCommsEditor && (
+          client.comms_status ? (
+            <div>
+              <div className="flex items-center gap-2 flex-wrap mb-2">
+                <span className={`inline-flex items-center gap-2 text-xs font-display font-bold tracking-widest uppercase px-3 py-1 rounded-full border ${
+                  client.comms_status === 'escalated'
+                    ? 'bg-accent/10 text-accent border-accent/30'
+                    : client.comms_status === 'resolved'
+                    ? 'bg-white/5 text-white/40 border-white/10'
+                    : 'bg-white/5 text-white/70 border-white/15'
+                }`}>
+                  {client.comms_status === 'escalated' ? '🚩 ' : ''}{COMMS_STATUS_LABELS[client.comms_status]}
+                </span>
+                {client.comms_status === 'escalated' && client.escalation_reason && (
+                  <span className="text-accent/80 text-xs font-body">
+                    {ESCALATION_REASON_LABELS[client.escalation_reason]}
+                  </span>
+                )}
+                {client.comms_status !== 'resolved' && (
+                  <button
+                    onClick={() => saveComms({ status: 'resolved', note: client.comms_note || '' })}
+                    disabled={commsSaving}
+                    className="text-[10px] font-display font-bold tracking-wider uppercase px-2 py-1 border border-white/10 rounded-full text-white/40 hover:border-green-500/30 hover:text-green-400 transition-colors cursor-pointer"
+                  >
+                    ✓ Done
+                  </button>
+                )}
+              </div>
+              {client.comms_note && (
+                <p className="text-white/70 text-sm font-body">{client.comms_note}</p>
+              )}
+              <p className="text-white/30 text-xs font-body mt-1">
+                Last touched {timeAgo(client.comms_updated_at)}
+                {client.comms_updated_by ? ` by ${COMMS_ACTOR_LABELS[client.comms_updated_by] || client.comms_updated_by}` : ''}
+              </p>
+            </div>
+          ) : (
+            <p className="text-white/30 text-sm font-body">Not in the follow-up queue.</p>
+          )
+        )}
+
+        {showCommsEditor && (
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              {COMMS_STATUSES.map(s => (
+                <button
+                  key={s}
+                  onClick={() => setCommsStatus(s)}
+                  className={`px-3 py-2 text-[11px] font-display font-bold tracking-widest uppercase rounded-lg border transition-colors cursor-pointer ${
+                    commsStatus === s
+                      ? s === 'escalated'
+                        ? 'bg-accent/15 border-accent/40 text-accent'
+                        : 'bg-white/10 border-white/30 text-white'
+                      : 'border-white/10 text-white/40 hover:border-white/20'
+                  }`}
+                >
+                  {s === 'escalated' ? '🚩 ' : ''}{COMMS_STATUS_LABELS[s]}
+                </button>
+              ))}
+            </div>
+
+            {commsStatus === 'escalated' && (
+              <div>
+                <label className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1.5">
+                  Reason
+                </label>
+                <select
+                  value={commsReason}
+                  onChange={e => setCommsReason(e.target.value)}
+                  className="w-full bg-surface-light border border-white/10 rounded-lg px-3 py-2 text-white font-body text-sm focus:outline-none focus:border-white/30 cursor-pointer"
+                >
+                  {ESCALATION_REASONS.map(r => (
+                    <option key={r} value={r}>{ESCALATION_REASON_LABELS[r]}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <textarea
+              value={commsNote}
+              onChange={e => setCommsNote(e.target.value)}
+              rows={2}
+              placeholder={commsStatus === 'escalated' ? 'What does Arnold need to know?' : 'Next action…'}
+              className="w-full bg-surface-light border border-white/10 rounded-lg px-3 py-2 text-white font-body text-sm placeholder:text-white/20 focus:outline-none focus:border-white/30 resize-y"
+            />
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => saveComms()}
+                disabled={commsSaving || !commsStatus}
+                className="flex-1 bg-accent text-white font-display font-bold text-sm tracking-wider uppercase py-3 rounded-full hover:bg-accent-dark transition-all cursor-pointer disabled:opacity-50"
+              >
+                {commsSaving ? 'Saving...' : 'Save'}
+              </button>
+              {client.comms_status && (
+                <button
+                  onClick={() => saveComms({ status: null })}
+                  disabled={commsSaving}
+                  className="px-4 text-[11px] font-display font-bold tracking-wider uppercase border border-white/10 rounded-full text-white/40 hover:border-white/30 hover:text-white transition-colors cursor-pointer"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {commsResult && (
+          <p className={`text-xs font-body mt-2 ${commsResult.success ? 'text-green-400' : 'text-red-400'}`}>
+            {commsResult.message}
+          </p>
         )}
       </div>
 
@@ -3474,6 +3660,13 @@ export default function AdminPage() {
   const [selectedClient, setSelectedClient] = useState(null);
   const [showAddClient, setShowAddClient] = useState(false);
 
+  // Follow-up queue — owned here rather than inside FollowUpsView so the tab's
+  // escalation badge and the queue itself read from one fetch.
+  const [followUps, setFollowUps] = useState([]);
+  const [followUpCounts, setFollowUpCounts] = useState({});
+  const [followUpsLoading, setFollowUpsLoading] = useState(false);
+  const [followUpsError, setFollowUpsError] = useState('');
+
   // Upload state
   const [uploadFile, setUploadFile] = useState(null);
   const [uploadDate, setUploadDate] = useState('');
@@ -3506,6 +3699,34 @@ export default function AdminPage() {
       console.error('Failed to fetch clients');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function fetchFollowUps() {
+    setFollowUpsLoading(true);
+    try {
+      const res = await fetch('/api/admin/client-comms', {
+        headers: { Authorization: `Bearer ${adminKey}` },
+      });
+      if (res.status === 401) {
+        setAuthenticated(false);
+        setLoginError('Invalid password. Please try again.');
+        return;
+      }
+      const data = await res.json();
+      if (!res.ok) {
+        // An empty queue and a queue that failed to load look identical on
+        // screen otherwise — and "nothing to do" is the more dangerous lie.
+        setFollowUpsError(data.error || 'Failed to load the follow-up queue.');
+        return;
+      }
+      setFollowUps(data.clients || []);
+      setFollowUpCounts(data.counts || {});
+      setFollowUpsError('');
+    } catch {
+      setFollowUpsError('Network error loading the follow-up queue.');
+    } finally {
+      setFollowUpsLoading(false);
     }
   }
 
@@ -3567,6 +3788,10 @@ export default function AdminPage() {
     if (authenticated) fetchClients();
   }, [authenticated, filter]);
 
+  useEffect(() => {
+    if (authenticated) fetchFollowUps();
+  }, [authenticated]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!authenticated) {
     return <LoginScreen onLogin={handleLogin} error={loginError} />;
   }
@@ -3605,7 +3830,7 @@ export default function AdminPage() {
             client={selectedClient}
             adminKey={adminKey}
             onBack={() => setSelectedClient(null)}
-            onUpdate={fetchClients}
+            onUpdate={() => { fetchClients(); fetchFollowUps(); }}
           />
         )}
 
@@ -3635,17 +3860,29 @@ export default function AdminPage() {
               </button>
             </div>
 
-            {/* Top-level tab switcher: Applications | Revenue | Arrears | Attendance | Camp | Activity */}
+            {/* Top-level tab switcher: Applications | Follow-ups | Revenue | Arrears | Attendance | Camp | Activity */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '20px', borderBottom: '1px solid #222', paddingBottom: '0' }}>
               <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                {[['applications', 'Applications'], ['revenue', 'Revenue'], ['arrears', 'Arrears'], ['attendance', 'Attendance'], ['camp', 'Camp'], ['audit', 'Activity']].map(([key, label]) => (
+                {[
+                  ['applications', 'Applications'],
+                  ['followups', followUpCounts.escalated > 0 ? `Follow-ups (${followUpCounts.escalated})` : 'Follow-ups'],
+                  ['revenue', 'Revenue'],
+                  ['arrears', 'Arrears'],
+                  ['attendance', 'Attendance'],
+                  ['camp', 'Camp'],
+                  ['audit', 'Activity'],
+                ].map(([key, label]) => (
                   <button
                     key={key}
                     onClick={() => setActiveTab(key)}
                     style={{
                       background: 'transparent',
                       border: 'none',
-                      color: activeTab === key ? '#f5f5f8' : '#555',
+                      color: activeTab === key
+                        ? '#f5f5f8'
+                        // An open escalation is the one thing worth pulling the
+                        // eye to a tab that isn't currently selected.
+                        : key === 'followups' && followUpCounts.escalated > 0 ? '#a60a08' : '#555',
                       fontFamily: 'Oswald, sans-serif',
                       fontWeight: 700,
                       fontSize: '14px',
@@ -3673,6 +3910,19 @@ export default function AdminPage() {
                 </button>
               )}
             </div>
+
+            {/* Follow-ups tab */}
+            {activeTab === 'followups' && (
+              <FollowUpsView
+                clients={followUps}
+                counts={followUpCounts}
+                loading={followUpsLoading}
+                loadError={followUpsError}
+                adminKey={adminKey}
+                onRefresh={fetchFollowUps}
+                onOpenClient={setSelectedClient}
+              />
+            )}
 
             {/* Revenue tab */}
             {activeTab === 'revenue' && (
