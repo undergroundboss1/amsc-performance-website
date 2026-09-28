@@ -2,6 +2,7 @@ export const metadata = {
   title: 'Join AMSC',
   description:
     'Choose your training plan, register, and start your athletic development journey with AMSC Performance.',
+  alternates: { canonical: '/join' },
   openGraph: {
     title: 'Join AMSC Performance',
     description:

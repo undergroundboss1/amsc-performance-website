@@ -1,16 +1,26 @@
 import ProgramDetail from '../../../components/ProgramDetail';
+import JsonLd from '../../../components/JsonLd';
 import { programsData } from '../../../lib/programs';
+import { programServiceSchema, breadcrumbSchema } from '../../../lib/structured-data';
 
 export const metadata = {
   title: 'Exclusive One-on-One',
-  description: "The highest level of coaching at AMSC — your coach's time and focus committed entirely to you. Ksh 50,000/month.",
+  description: 'Exclusive one-on-one strength & conditioning coaching in Nairobi, Kenya — a sports performance coach dedicated entirely to you, for elite and professional athletes. Ksh 50,000/month.',
+  alternates: { canonical: '/programs/exclusive' },
   openGraph: {
-    title: 'Exclusive One-on-One | AMSC Performance',
+    title: 'Exclusive One-on-One Coaching | AMSC Performance',
     description: "Your coach's time and focus, committed entirely to you.",
+    url: '/programs/exclusive',
     images: [{ url: '/images/program-one-on-one.jpg' }],
   },
 };
 
 export default function ExclusivePage() {
-  return <ProgramDetail program={{ ...programsData['exclusive'], slug: 'exclusive' }} />;
+  return (
+    <>
+      <JsonLd data={programServiceSchema('exclusive')} />
+      <JsonLd data={breadcrumbSchema([['Home', '/'], ['Programs', '/programs'], [programsData['exclusive'].name, '/programs/exclusive']])} />
+      <ProgramDetail program={{ ...programsData['exclusive'], slug: 'exclusive' }} />
+    </>
+  );
 }
