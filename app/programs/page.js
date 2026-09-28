@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import AnimatedSection from '../../components/AnimatedSection';
+import { getPlanDisplayPrice } from '../../lib/plans';
 
 const programs = [
   {
@@ -9,7 +10,7 @@ const programs = [
     label: 'EXCLUSIVE.',
     name: 'Exclusive One-on-One',
     desc: "The highest level of coaching at AMSC — your coach's time and focus committed entirely to you.",
-    price: 'Ksh 50,000',
+    price: getPlanDisplayPrice('exclusive'),
     image: '/images/program-one-on-one.jpg',
     imagePosition: 'object-center',
   },
@@ -18,7 +19,7 @@ const programs = [
     label: 'INDIVIDUAL.',
     name: 'Individualized Coaching',
     desc: 'A programme built entirely around you, with hands-on coach-led sessions.',
-    price: 'Ksh 30,000',
+    price: getPlanDisplayPrice('one-on-one'),
     image: '/images/program-one-on-one.jpg',
     imagePosition: 'object-center',
   },
@@ -27,7 +28,7 @@ const programs = [
     label: 'STRUCTURED.',
     name: 'Performance Group Training',
     desc: 'Structured in-person training within a high-performance environment.',
-    price: 'Ksh 15,000',
+    price: getPlanDisplayPrice('group'),
     image: '/images/program-group.jpg',
     imagePosition: 'object-center',
   },
@@ -36,7 +37,7 @@ const programs = [
     label: 'FLEXIBLE.',
     name: 'Online Performance Training',
     desc: 'Structured performance programming for athletes and driven individuals training remotely.',
-    price: 'Ksh 12,000',
+    price: getPlanDisplayPrice('online'),
     image: '/images/program-online.jpg',
     imagePosition: 'object-[center_18%]',
   },
@@ -45,7 +46,7 @@ const programs = [
     label: 'DEVELOPMENTAL.',
     name: 'Youth Athletic Development',
     desc: 'Building athletic foundations for young athletes aged 10–15.',
-    price: 'Ksh 10,000',
+    price: getPlanDisplayPrice('youth'),
     image: '/images/youth-athlete-lunge.jpg',
     imagePosition: 'object-center',
   },

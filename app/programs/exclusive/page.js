@@ -1,11 +1,12 @@
 import ProgramDetail from '../../../components/ProgramDetail';
 import JsonLd from '../../../components/JsonLd';
 import { programsData } from '../../../lib/programs';
+import { getPlanDisplayPrice } from '../../../lib/plans';
 import { programServiceSchema, breadcrumbSchema } from '../../../lib/structured-data';
 
 export const metadata = {
   title: 'Exclusive One-on-One',
-  description: 'Exclusive one-on-one strength & conditioning coaching in Nairobi, Kenya — a sports performance coach dedicated entirely to you, for elite and professional athletes. Ksh 50,000/month.',
+  description: `Exclusive one-on-one strength & conditioning coaching in Nairobi, Kenya — a sports performance coach dedicated entirely to you, for elite and professional athletes. ${getPlanDisplayPrice('exclusive')}/month.`,
   alternates: { canonical: '/programs/exclusive' },
   openGraph: {
     title: 'Exclusive One-on-One Coaching | AMSC Performance',

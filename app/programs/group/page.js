@@ -1,11 +1,12 @@
 import ProgramDetail from '../../../components/ProgramDetail';
 import JsonLd from '../../../components/JsonLd';
 import { programsData } from '../../../lib/programs';
+import { getPlanDisplayPrice } from '../../../lib/plans';
 import { programServiceSchema, breadcrumbSchema } from '../../../lib/structured-data';
 
 export const metadata = {
   title: 'Performance Group Training',
-  description: 'Small-group sports performance and strength & conditioning training in Nairobi, Kenya — periodized, coach-led sessions for athletes. Ksh 15,000/month.',
+  description: `Small-group sports performance and strength & conditioning training in Nairobi, Kenya — periodized, coach-led sessions for athletes. ${getPlanDisplayPrice('group')}/month.`,
   alternates: { canonical: '/programs/group' },
   openGraph: {
     title: 'Performance Group Training | AMSC Performance',

@@ -1,11 +1,12 @@
 import ProgramDetail from '../../../components/ProgramDetail';
 import JsonLd from '../../../components/JsonLd';
 import { programsData } from '../../../lib/programs';
+import { getPlanDisplayPrice } from '../../../lib/plans';
 import { programServiceSchema, breadcrumbSchema } from '../../../lib/structured-data';
 
 export const metadata = {
   title: 'Individualized Coaching',
-  description: 'Individualized strength & conditioning coaching in Nairobi, Kenya — a programme built around your assessment and data, with hands-on coach-led sessions. Ksh 30,000/month.',
+  description: `Individualized strength & conditioning coaching in Nairobi, Kenya — a programme built around your assessment and data, with hands-on coach-led sessions. ${getPlanDisplayPrice('one-on-one')}/month.`,
   alternates: { canonical: '/programs/one-on-one' },
   openGraph: {
     title: 'Individualized Coaching | AMSC Performance',
