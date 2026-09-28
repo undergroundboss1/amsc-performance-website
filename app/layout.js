@@ -6,6 +6,7 @@ import CookieConsent from "../components/CookieConsent";
 import { ConsentProvider } from "../components/ConsentContext";
 import ScrollProgressBar from "../components/ScrollProgressBar";
 import GoogleAnalytics from "../components/GoogleAnalytics";
+import { getPlanById } from "../lib/plans";
 
 const barlow = Barlow({
   subsets: ["latin"],
@@ -128,31 +129,31 @@ export default function RootLayout({ children }) {
                   {
                     '@type': 'Offer',
                     itemOffered: { '@type': 'Service', name: 'Exclusive One-on-One Coaching', description: 'The highest level of coaching at AMSC — a coach fully dedicated to one athlete, in Nairobi.' },
-                    price: '50000',
+                    price: String(getPlanById('exclusive').price),
                     priceCurrency: 'KES',
                   },
                   {
                     '@type': 'Offer',
                     itemOffered: { '@type': 'Service', name: 'Individualized Coaching', description: 'An individualized programme with hands-on coach-led sessions for athletes in Nairobi.' },
-                    price: '30000',
+                    price: String(getPlanById('one-on-one').price),
                     priceCurrency: 'KES',
                   },
                   {
                     '@type': 'Offer',
                     itemOffered: { '@type': 'Service', name: 'Performance Group Training', description: 'Small-group athletic development training in Nairobi.' },
-                    price: '15000',
+                    price: String(getPlanById('group').price),
                     priceCurrency: 'KES',
                   },
                   {
                     '@type': 'Offer',
                     itemOffered: { '@type': 'Service', name: 'Online Performance Training', description: 'Remote strength & conditioning programming for athletes across Kenya and East Africa.' },
-                    price: '12000',
+                    price: String(getPlanById('online').price),
                     priceCurrency: 'KES',
                   },
                   {
                     '@type': 'Offer',
                     itemOffered: { '@type': 'Service', name: 'Youth Athletic Development', description: 'Structured athletic development for youth athletes in Nairobi.' },
-                    price: '10000',
+                    price: String(getPlanById('youth').price),
                     priceCurrency: 'KES',
                   },
                 ],

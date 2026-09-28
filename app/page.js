@@ -11,6 +11,7 @@ import ScrollReveal from '../components/ScrollReveal';
 import TextReveal from '../components/TextReveal';
 import CountUp from '../components/CountUp';
 import InstagramFeed from '../components/InstagramFeed';
+import { getPlanDisplayPrice } from '../lib/plans';
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
 
@@ -68,7 +69,7 @@ const programs = [
       'Real-time coaching and load adjustment on every rep.',
       'Priority scheduling and complete session flexibility.',
     ],
-    price: 'Ksh 50,000',
+    price: getPlanDisplayPrice('exclusive'),
     slug: 'exclusive',
     featured: true,
   },
@@ -82,7 +83,7 @@ const programs = [
       'Regular performance reviews and programme adjustments.',
       'Flexible scheduling within coached training windows.',
     ],
-    price: 'Ksh 30,000',
+    price: getPlanDisplayPrice('one-on-one'),
     slug: 'one-on-one',
   },
   {
@@ -95,7 +96,7 @@ const programs = [
       'Structured performance benchmarks.',
       'Professional training environment with coaching oversight.',
     ],
-    price: 'Ksh 15,000',
+    price: getPlanDisplayPrice('group'),
     slug: 'group',
   },
   {
@@ -108,7 +109,7 @@ const programs = [
       'Progressive overload and capacity tracking.',
       'Built for independent execution with system accountability.',
     ],
-    price: 'Ksh 12,000',
+    price: getPlanDisplayPrice('online'),
     slug: 'online',
   },
   {
@@ -121,7 +122,7 @@ const programs = [
       'Injury prevention through proper movement mechanics.',
       'Long-term athletic development pathway.',
     ],
-    price: 'Ksh 10,000',
+    price: getPlanDisplayPrice('youth'),
     slug: 'youth',
   },
 ];

@@ -1,9 +1,10 @@
 import ProgramDetail from '../../../components/ProgramDetail';
 import { programsData } from '../../../lib/programs';
+import { getPlanDisplayPrice } from '../../../lib/plans';
 
 export const metadata = {
   title: 'Exclusive One-on-One',
-  description: "The highest level of coaching at AMSC — your coach's time and focus committed entirely to you. Ksh 50,000/month.",
+  description: `The highest level of coaching at AMSC — your coach's time and focus committed entirely to you. ${getPlanDisplayPrice('exclusive')}/month.`,
   openGraph: {
     title: 'Exclusive One-on-One | AMSC Performance',
     description: "Your coach's time and focus, committed entirely to you.",

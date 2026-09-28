@@ -1,9 +1,10 @@
 import ProgramDetail from '../../../components/ProgramDetail';
 import { programsData } from '../../../lib/programs';
+import { getPlanDisplayPrice } from '../../../lib/plans';
 
 export const metadata = {
   title: 'Online Performance Training',
-  description: 'Structured performance programming for athletes training remotely. Ksh 12,000/month at AMSC Performance.',
+  description: `Structured performance programming for athletes training remotely. ${getPlanDisplayPrice('online')}/month at AMSC Performance.`,
   openGraph: {
     title: 'Online Performance Training | AMSC Performance',
     description: 'Structured programming for athletes training remotely.',
