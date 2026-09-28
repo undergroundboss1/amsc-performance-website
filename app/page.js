@@ -53,7 +53,7 @@ const systemCards = [
 
 const stats = [
   { value: 100, suffix: '+', label: 'Athletes Trained' },
-  { value: 6, suffix: '', label: 'Sports' },
+  { value: 7, suffix: '+', label: 'Sports' },
   { value: 6, suffix: '+', label: 'Years' },
   { value: 100, suffix: '%', label: 'Data-Driven' },
 ];

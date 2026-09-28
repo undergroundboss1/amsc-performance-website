@@ -28,7 +28,8 @@ export default function Footer() {
               <Link href="/" className="block text-secondary text-sm hover:text-accent transition-colors font-body">Home</Link>
               <Link href="/programs" className="block text-secondary text-sm hover:text-accent transition-colors font-body">Programs</Link>
               <Link href="/philosophy" className="block text-secondary text-sm hover:text-accent transition-colors font-body">Philosophy</Link>
-              <Link href="/member-portal" className="block text-secondary text-sm hover:text-accent transition-colors font-body">Member Portal</Link>
+              <Link href="/faq" className="block text-secondary text-sm hover:text-accent transition-colors font-body">FAQ</Link>
+              <Link href="/member-portal"className="block text-secondary text-sm hover:text-accent transition-colors font-body">Member Portal</Link>
               <Link href="/join" className="block text-secondary text-sm hover:text-accent transition-colors font-body">Join</Link>
               <Link href="/privacy" className="block text-secondary text-sm hover:text-accent transition-colors font-body">Privacy Policy</Link>
               <Link href="/terms" className="block text-secondary text-sm hover:text-accent transition-colors font-body">Terms of Use</Link>
