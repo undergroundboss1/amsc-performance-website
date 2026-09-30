@@ -13,15 +13,13 @@ export const metadata = {
     title: program.meta.title,
     description: program.meta.description,
     url: program.path,
+    images: [{ url: program.hero.image }],
   },
   twitter: {
     title: program.meta.title,
     description: program.meta.description,
+    images: [program.hero.image],
   },
-};
-
-export const viewport = {
-  themeColor: '#000000',
 };
 
 export default function OffPitchWaitlistPage() {

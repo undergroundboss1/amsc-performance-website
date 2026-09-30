@@ -16,7 +16,8 @@ import { SOURCE_LABELS } from '../../../../lib/waitlist-source';
 const COLUMNS = [
   'id', 'created_at', 'first_name', 'email', 'instagram_handle',
   'position', 'level', 'age_band', 'early_access_opt_in', 'guardian_consent',
-  'consent_text_version', 'source', 'utm_source', 'utm_medium', 'utm_campaign',
+  'marketing_consent', 'other_marketing_opt_in', 'consent_text_version', 'consented_at',
+  'unsubscribed_at', 'confirmation_sent_at', 'source', 'utm_source', 'utm_medium', 'utm_campaign',
   'utm_content', 'referrer_host', 'in_app_browser', 'country',
 ];
 
@@ -74,8 +75,15 @@ function summarize(rows, program) {
     days.push({ day: key, count: perDay[key] || 0 });
   }
 
+  const active = rows.filter((r) => r.marketing_consent && !r.unsubscribed_at);
+
   return {
     total: rows.length,
+    // Who can be emailed today: ticked the consent box and hasn't unsubscribed.
+    active: active.length,
+    unsubscribed: rows.filter((r) => r.unsubscribed_at).length,
+    otherMarketing: active.filter((r) => r.other_marketing_opt_in).length,
+    emailsSent: rows.filter((r) => r.confirmation_sent_at).length,
     last24h: since(86_400_000),
     last7d: since(7 * 86_400_000),
     instagram,

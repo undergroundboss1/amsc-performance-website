@@ -1,7 +1,7 @@
 // AI assistants (ChatGPT, Claude, Perplexity, Gemini, Copilot…) can only
 // recommend AMSC if their crawlers and live-browsing agents may read the site,
 // so they are allowed explicitly. Private areas stay out of every index.
-const PRIVATE = ['/admin', '/api/', '/member-portal', '/join/pay', '/join/success', '/monitoring'];
+const PRIVATE = ['/admin', '/api/', '/member-portal', '/join/pay', '/join/success', '/monitoring', '/waitlist/unsubscribe'];
 
 const AI_AGENTS = [
   'GPTBot', 'OAI-SearchBot', 'ChatGPT-User',

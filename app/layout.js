@@ -7,7 +7,6 @@ import { ConsentProvider } from "../components/ConsentContext";
 import ScrollProgressBar from "../components/ScrollProgressBar";
 import GoogleAnalytics from "../components/GoogleAnalytics";
 import JsonLd from "../components/JsonLd";
-import SiteChrome from "../components/SiteChrome";
 import { SITE_URL } from "../lib/business";
 import { organizationSchema, websiteSchema } from "../lib/structured-data";
 
@@ -102,17 +101,13 @@ export default function RootLayout({ children }) {
           >
             Skip to content
           </a>
-          <SiteChrome>
-            <ScrollProgressBar />
-            <Navbar />
-          </SiteChrome>
+          <ScrollProgressBar />
+          <Navbar />
           <main id="main-content">
             {children}
           </main>
-          <SiteChrome>
-            <Footer />
-            <CookieConsent />
-          </SiteChrome>
+          <Footer />
+          <CookieConsent />
           <GoogleAnalytics />
         </ConsentProvider>
       </body>

@@ -22,6 +22,7 @@ const LIMITS = {
   // Higher than the forms above: Kenyan mobile carriers put many phones
   // behind one shared IP, and a Reel can send a burst of real signups.
   '/api/waitlist':           { max: 10, windowMs: 60_000 },
+  '/api/waitlist/unsubscribe': { max: 10, windowMs: 60_000 },
   // Admin-only, but still capped: working through a list of debtors is a
   // legitimate burst, while anything past this is a stuck retry loop.
   '/api/admin/send-payment-email': { max: 20, windowMs: 60_000 },
@@ -94,6 +95,7 @@ export const config = {
     '/api/camp/register',
     '/api/camp/pay',
     '/api/waitlist',
+    '/api/waitlist/unsubscribe',
     // Note: /monitoring is intentionally excluded — it's the Sentry tunnel route
   ],
 };

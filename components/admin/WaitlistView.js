@@ -181,11 +181,14 @@ export default function WaitlistView({ adminKey }) {
       {s && (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px', marginBottom: '8px' }}>
-            <Tile value={s.total} label="Total" />
+            <Tile value={s.total} label="Total joined" />
+            <Tile value={s.active} label="Emailable" sub={`Consented, not unsubscribed · ${s.unsubscribed} unsubscribed`} />
             <Tile value={s.last24h} label="Last 24h" />
             <Tile value={s.last7d} label="Last 7 days" />
             <Tile value={s.instagram} label="From Instagram" sub={`${pct(s.instagram, s.total)} of total · ${s.total - s.instagram} other`} />
             <Tile value={s.earlyAccess} label="Early access" sub={`${pct(s.earlyAccess, s.total)} opted in`} />
+            <Tile value={s.otherMarketing} label="Other AMSC emails" sub="Opted in to other programs" />
+            <Tile value={s.emailsSent} label="Confirmations sent" sub={s.emailsSent < s.total ? `${s.total - s.emailsSent} not sent — check Resend` : 'All sent'} />
           </div>
 
           <div style={{ marginBottom: '8px' }}>
@@ -220,7 +223,7 @@ export default function WaitlistView({ adminKey }) {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                 <thead>
                   <tr style={{ background: SURFACE, textAlign: 'left', color: INK_2 }}>
-                    {['Joined', 'Name', 'Email', 'Instagram', 'Position', 'Level', 'Age', 'Source', 'Early'].map((h) => (
+                    {['Joined', 'Name', 'Email', 'Status', 'Instagram', 'Position', 'Level', 'Age', 'Source', 'Early'].map((h) => (
                       <th key={h} style={{ padding: '8px 10px', fontWeight: 600, whiteSpace: 'nowrap', borderBottom: `1px solid ${LINE}` }}>{h}</th>
                     ))}
                   </tr>
@@ -231,6 +234,9 @@ export default function WaitlistView({ adminKey }) {
                       <td style={{ padding: '8px 10px', whiteSpace: 'nowrap', color: INK_2 }}>{formatDateTime(r.created_at)}</td>
                       <td style={{ padding: '8px 10px' }}>{r.first_name}</td>
                       <td style={{ padding: '8px 10px' }}>{r.email}</td>
+                      <td style={{ padding: '8px 10px', whiteSpace: 'nowrap', color: r.unsubscribed_at ? INK_3 : r.marketing_consent ? '#86efac' : '#fbbf24' }}>
+                        {r.unsubscribed_at ? 'Unsubscribed' : r.marketing_consent ? `Subscribed${r.other_marketing_opt_in ? ' +' : ''}` : 'No consent (v1)'}
+                      </td>
                       <td style={{ padding: '8px 10px' }}>
                         {r.instagram_handle ? (
                           <a href={`https://www.instagram.com/${r.instagram_handle}/`} target="_blank" rel="noopener noreferrer" style={{ color: INK }}>@{r.instagram_handle}</a>
