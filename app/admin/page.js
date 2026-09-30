@@ -6,6 +6,7 @@ import { getPaymentTiming, getOverdueStatus } from '../../lib/billing';
 import CampView from '../../components/admin/CampView';
 import AuditLogView from '../../components/admin/AuditLogView';
 import FollowUpsView from '../../components/admin/FollowUpsView';
+import WaitlistView from '../../components/admin/WaitlistView';
 import {
   COMMS_STATUSES,
   COMMS_STATUS_LABELS,
@@ -3860,7 +3861,7 @@ export default function AdminPage() {
               </button>
             </div>
 
-            {/* Top-level tab switcher: Applications | Follow-ups | Revenue | Arrears | Attendance | Camp | Activity */}
+            {/* Top-level tab switcher: Applications | Follow-ups | Revenue | Arrears | Attendance | Camp | Waitlist | Activity */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '20px', borderBottom: '1px solid #222', paddingBottom: '0' }}>
               <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                 {[
@@ -3870,6 +3871,7 @@ export default function AdminPage() {
                   ['arrears', 'Arrears'],
                   ['attendance', 'Attendance'],
                   ['camp', 'Camp'],
+                  ['waitlist', 'Waitlist'],
                   ['audit', 'Activity'],
                 ].map(([key, label]) => (
                   <button
@@ -3937,6 +3939,11 @@ export default function AdminPage() {
             {/* Camp tab */}
             {activeTab === 'camp' && (
               <CampView adminKey={adminKey} />
+            )}
+
+            {/* Waitlist tab */}
+            {activeTab === 'waitlist' && (
+              <WaitlistView adminKey={adminKey} />
             )}
 
             {/* Activity (audit log) tab */}

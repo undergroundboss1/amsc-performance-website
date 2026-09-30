@@ -19,6 +19,9 @@ const LIMITS = {
   '/api/payments/paystack':  { max: 5,  windowMs: 60_000 },
   '/api/camp/register':      { max: 5,  windowMs: 60_000 },
   '/api/camp/pay':           { max: 5,  windowMs: 60_000 },
+  // Higher than the forms above: Kenyan mobile carriers put many phones
+  // behind one shared IP, and a Reel can send a burst of real signups.
+  '/api/waitlist':           { max: 10, windowMs: 60_000 },
   // Admin-only, but still capped: working through a list of debtors is a
   // legitimate burst, while anything past this is a stuck retry loop.
   '/api/admin/send-payment-email': { max: 20, windowMs: 60_000 },
@@ -90,6 +93,7 @@ export const config = {
     '/api/payments/paystack',
     '/api/camp/register',
     '/api/camp/pay',
+    '/api/waitlist',
     // Note: /monitoring is intentionally excluded — it's the Sentry tunnel route
   ],
 };

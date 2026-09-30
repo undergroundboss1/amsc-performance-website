@@ -16,6 +16,7 @@ export default function sitemap() {
     { url: `${baseUrl}/faq`, lastModified, changeFrequency: 'monthly', priority: 0.8 },
     { url: `${baseUrl}/philosophy`, lastModified, changeFrequency: 'monthly', priority: 0.7 },
     { url: `${baseUrl}/camps`, lastModified, changeFrequency: 'weekly', priority: 0.7 },
+    { url: `${baseUrl}/offpitch`, lastModified, changeFrequency: 'weekly', priority: 0.6 },
     { url: `${baseUrl}/apply`, lastModified, changeFrequency: 'monthly', priority: 0.8 },
     { url: `${baseUrl}/join`, lastModified, changeFrequency: 'monthly', priority: 0.8 },
     { url: `${baseUrl}/reports`, lastModified, changeFrequency: 'monthly', priority: 0.5 },

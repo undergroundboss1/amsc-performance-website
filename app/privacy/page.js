@@ -8,7 +8,7 @@ export default function PrivacyPage() {
     <section className="min-h-screen bg-background py-24 px-6">
       <div className="max-w-3xl mx-auto">
         <h1 className="font-display text-4xl md:text-5xl font-bold text-white mb-4">Privacy Policy</h1>
-        <p className="text-secondary text-sm mb-12">Last updated: 4 April 2025</p>
+        <p className="text-secondary text-sm mb-12">Last updated: 30 September 2026</p>
 
         <div className="prose-legal space-y-10 text-secondary text-sm leading-relaxed font-body">
           <div>
@@ -58,7 +58,19 @@ export default function PrivacyPage() {
               </a>.
             </p>
 
-            <h3 className="font-display text-base font-bold text-white mt-4 mb-2">c) Hosting & Server Logs (Vercel)</h3>
+            <h3 className="font-display text-base font-bold text-white mt-4 mb-2">c) Program Waitlists (e.g. AMSC Off Pitch)</h3>
+            <p>
+              When you join a program waitlist, we collect your first name, email address, playing position, level
+              and age range, and, if you choose to give them, your Instagram handle and whether you want to be
+              considered for early access. We also record how you reached the page (for example, the Instagram app or a
+              link with a campaign tag), the website that referred you, and your country as detected from your
+              connection. We do not store your IP address. We use this to tell you about the program before launch, to
+              invite early-access testers, and to understand who the program is for. Waitlist data is stored with our
+              database provider, Supabase, and is only accessible to AMSC staff. For anyone under 18, we ask for
+              confirmation that a parent or guardian has agreed before they join.
+            </p>
+
+            <h3 className="font-display text-base font-bold text-white mt-4 mb-2">d) Hosting & Server Logs (Vercel)</h3>
             <p>
               Our Site is hosted on Vercel. Vercel may automatically collect technical data such as your IP address,
               browser type, and access times for security and performance purposes. See{' '}
@@ -82,7 +94,7 @@ export default function PrivacyPage() {
             <h2 className="font-display text-lg font-bold text-white mb-3">5. Data Sharing</h2>
             <p>
               We do not sell your personal data. We share data only with the third-party service providers listed above
-              (Tally.so, Behold.so, Vercel) as necessary to operate the Site and process applications. These providers
+              (Tally.so, Behold.so, Vercel, Supabase) as necessary to operate the Site and process applications. These providers
               act as data processors on our behalf or as independent controllers for their own services.
             </p>
           </div>
@@ -100,8 +112,9 @@ export default function PrivacyPage() {
             <h2 className="font-display text-lg font-bold text-white mb-3">7. Data Retention</h2>
             <p>
               Application data submitted through Tally.so is retained for as long as necessary to process your
-              application and for a reasonable period thereafter for record-keeping. You may request deletion at any
-              time by contacting us.
+              application and for a reasonable period thereafter for record-keeping. Waitlist data is kept until the
+              program launches and for up to 12 months after, then deleted, unless you enrol. You may request deletion
+              or leave a waitlist at any time by contacting us.
             </p>
           </div>
 
