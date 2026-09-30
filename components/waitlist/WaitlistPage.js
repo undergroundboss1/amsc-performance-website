@@ -143,6 +143,7 @@ export default function WaitlistPage({ program }) {
             className="font-display font-black text-5xl sm:text-6xl md:text-8xl tracking-widest text-white mt-8 mb-6 drop-shadow-lg"
           >
             {hero.headline}
+            {hero.headlineAccent && <> <span className="text-accent">{hero.headlineAccent}</span></>}
           </motion.h1>
 
           <motion.p variants={heroChild} className="text-white/70 text-lg md:text-xl max-w-2xl mx-auto font-body mb-4">
