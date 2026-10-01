@@ -133,14 +133,16 @@ export default function WaitlistPage({ program }) {
           initial="hidden"
           animate="visible"
         >
-          <motion.div variants={heroChild}>
-            <span className="inline-block text-accent font-display text-xs font-bold tracking-[0.25em] bg-white/10 px-4 py-2 rounded-full backdrop-blur-sm">
-              {hero.label}
-            </span>
-          </motion.div>
+          {hero.label && (
+            <motion.div variants={heroChild} className="mb-8">
+              <span className="inline-block text-accent font-display text-xs font-bold tracking-[0.25em] bg-white/10 px-4 py-2 rounded-full backdrop-blur-sm">
+                {hero.label}
+              </span>
+            </motion.div>
+          )}
 
           {hero.logo ? (
-            <motion.h1 variants={heroChild} className="mt-8 mb-6">
+            <motion.h1 variants={heroChild} className="mb-6">
               <Image
                 src={hero.logo.src}
                 alt={hero.headline}
@@ -154,7 +156,7 @@ export default function WaitlistPage({ program }) {
           ) : (
             <motion.h1
               variants={heroChild}
-              className="font-display font-black text-5xl sm:text-6xl md:text-8xl tracking-widest text-white mt-8 mb-6 drop-shadow-lg"
+              className="font-display font-black text-5xl sm:text-6xl md:text-8xl tracking-widest text-white mb-6 drop-shadow-lg"
             >
               {hero.headline}
             </motion.h1>
