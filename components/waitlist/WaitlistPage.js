@@ -146,9 +146,11 @@ export default function WaitlistPage({ program }) {
             {hero.headlineAccent && <> <span className="text-accent">{hero.headlineAccent}</span></>}
           </motion.h1>
 
-          <motion.p variants={heroChild} className="text-white/70 text-lg md:text-xl max-w-2xl mx-auto font-body mb-4">
-            {hero.lede}
-          </motion.p>
+          {hero.lede && (
+            <motion.p variants={heroChild} className="text-white/70 text-lg md:text-xl max-w-2xl mx-auto font-body mb-4">
+              {hero.lede}
+            </motion.p>
+          )}
 
           <motion.p variants={heroChild} className="font-body text-white/40 text-xs md:text-sm tracking-widest uppercase mb-10">
             {hero.tagline}
