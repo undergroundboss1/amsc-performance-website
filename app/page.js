@@ -11,6 +11,7 @@ import ScrollReveal from '../components/ScrollReveal';
 import TextReveal from '../components/TextReveal';
 import CountUp from '../components/CountUp';
 import InstagramFeed from '../components/InstagramFeed';
+import { getPlanDisplayPrice } from '../lib/plans';
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
 
@@ -52,7 +53,7 @@ const systemCards = [
 
 const stats = [
   { value: 100, suffix: '+', label: 'Athletes Trained' },
-  { value: 6, suffix: '', label: 'Sports' },
+  { value: 7, suffix: '+', label: 'Sports' },
   { value: 6, suffix: '+', label: 'Years' },
   { value: 100, suffix: '%', label: 'Data-Driven' },
 ];
@@ -68,7 +69,7 @@ const programs = [
       'Real-time coaching and load adjustment on every rep.',
       'Priority scheduling and complete session flexibility.',
     ],
-    price: 'Ksh 50,000',
+    price: getPlanDisplayPrice('exclusive'),
     slug: 'exclusive',
     featured: true,
   },
@@ -82,7 +83,7 @@ const programs = [
       'Regular performance reviews and programme adjustments.',
       'Flexible scheduling within coached training windows.',
     ],
-    price: 'Ksh 30,000',
+    price: getPlanDisplayPrice('one-on-one'),
     slug: 'one-on-one',
   },
   {
@@ -95,7 +96,7 @@ const programs = [
       'Structured performance benchmarks.',
       'Professional training environment with coaching oversight.',
     ],
-    price: 'Ksh 15,000',
+    price: getPlanDisplayPrice('group'),
     slug: 'group',
   },
   {
@@ -108,7 +109,7 @@ const programs = [
       'Progressive overload and capacity tracking.',
       'Built for independent execution with system accountability.',
     ],
-    price: 'Ksh 12,000',
+    price: getPlanDisplayPrice('online'),
     slug: 'online',
   },
   {
@@ -121,7 +122,7 @@ const programs = [
       'Injury prevention through proper movement mechanics.',
       'Long-term athletic development pathway.',
     ],
-    price: 'Ksh 10,000',
+    price: getPlanDisplayPrice('youth'),
     slug: 'youth',
   },
 ];
@@ -243,11 +244,29 @@ export default function Home() {
               Explore Programs
             </Link>
           </motion.div>
+
+          {/* AMSC Off Pitch waitlist strip — remove once Off Pitch launches */}
+          <motion.div variants={heroChild} className="mt-10">
+            <Link
+              href="/offpitch"
+              className="group inline-flex items-center gap-3 max-w-full bg-black/40 backdrop-blur-sm border border-white/15 rounded-full pl-2 pr-5 py-2 hover:border-accent/60 hover:bg-black/60 transition-all duration-200"
+            >
+              <span className="flex-shrink-0 bg-accent text-white font-display text-[10px] font-bold tracking-widest uppercase px-3 py-1 rounded-full">
+                New
+              </span>
+              <span className="font-body text-white/80 text-xs sm:text-sm text-left group-hover:text-white transition-colors">
+                <span className="font-display font-bold tracking-wider uppercase text-white">AMSC Off Pitch</span>
+                <span className="hidden sm:inline"> · Football off-season program</span>
+                <span className="text-white/50"> · Join the waitlist</span>
+              </span>
+              <span aria-hidden="true" className="flex-shrink-0 text-accent transition-transform duration-200 group-hover:translate-x-1">→</span>
+            </Link>
+          </motion.div>
         </motion.div>
 
-        {/* Scroll cue */}
+        {/* Scroll cue — hidden on phones, where the Off Pitch strip sits in its place */}
         <motion.div
-          className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2"
+          className="absolute bottom-10 left-1/2 -translate-x-1/2 hidden sm:flex flex-col items-center gap-2"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 1.8, duration: 0.8 }}

@@ -1,0 +1,236 @@
+import { NextResponse } from 'next/server';
+import crypto from 'crypto';
+import { getWaitlistSupabase } from '../../../lib/supabase';
+import { getWaitlistProgram } from '../../../lib/waitlists';
+import { sanitize, validateWaitlistSignup } from '../../../lib/validators';
+import { classifySource, detectInAppBrowser } from '../../../lib/waitlist-source';
+import { normalizeWhatsapp } from '../../../lib/waitlist-phone';
+import { sendEmail, buildWaitlistConfirmationEmail } from '../../../lib/email';
+import { SITE_URL, business } from '../../../lib/business';
+
+/**
+ * POST /api/waitlist
+ *
+ * Adds one person to one program's waitlist (lib/waitlists.js) and sends the
+ * confirmation email.
+ *
+ * CONSENT: `marketingConsent` must be an explicit true (an unticked box the
+ * person ticked); the wording version and time are stored on the row.
+ *
+ * SPAM & DUPLICATES — layered, cheapest first:
+ * - middleware.js rate-limits this route per IP.
+ * - Cross-site posts are refused (Origin must match this host).
+ * - A hidden honeypot field and a minimum fill time catch simple bots. Both
+ *   get a fake success response, so a bot learns nothing from the reply.
+ * - UNIQUE (program_slug, email) in the database. A repeat signup returns the
+ *   same success response as a first one and leaves the original row alone,
+ *   and does NOT send another email — so this form can't be used to flood
+ *   someone's inbox. Exceptions, each a single email:
+ *     · the person had unsubscribed and is re-joining (fresh consent),
+ *     · the existing row predates the consent box (fresh consent), or
+ *     · their first confirmation email never went out.
+ *
+ * PRIVACY: stores no IP address and no full user agent — see
+ * lib/waitlist-source.js for what attribution data is kept.
+ */
+
+// A human can't read the page and fill the form in less than this.
+const MIN_FILL_MS = 2500;
+
+const FROM = process.env.WAITLIST_FROM_EMAIL || 'AMSC Performance <offpitch@amscperformance.com>';
+
+const OK = () => NextResponse.json({ ok: true }, { status: 201 });
+
+function clip(value, max) {
+  if (typeof value !== 'string') return null;
+  const v = sanitize(value).slice(0, max);
+  return v || null;
+}
+
+function hostOf(value) {
+  if (!value || typeof value !== 'string') return null;
+  try {
+    return new URL(value.includes('://') ? value : `https://${value}`).hostname.toLowerCase().slice(0, 120);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Send the confirmation email and stamp confirmation_sent_at. Never throws —
+ * a failed email must not turn a successful signup into an error screen.
+ */
+async function sendConfirmation(db, program, row) {
+  try {
+    const unsubscribeUrl = `${SITE_URL}/waitlist/unsubscribe?token=${row.unsubscribe_token}`;
+    const { html, text } = buildWaitlistConfirmationEmail({
+      firstName: row.first_name,
+      programName: program.name,
+      programUrl: `${SITE_URL}${program.path}`,
+      instagramUrl: business.instagram,
+      unsubscribeUrl,
+      earlyAccess: row.early_access_opt_in,
+      intro: program.email.intro,
+    });
+
+    const { ok, error } = await sendEmail({
+      to: row.email,
+      from: FROM,
+      replyTo: business.email,
+      subject: program.email.subject,
+      html,
+      text,
+      // One-click unsubscribe (RFC 8058) — Gmail and Yahoo show an
+      // "Unsubscribe" button next to the sender using these.
+      headers: {
+        'List-Unsubscribe': `<${SITE_URL}/api/waitlist/unsubscribe?token=${row.unsubscribe_token}>`,
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      },
+    });
+
+    if (!ok) {
+      console.error('waitlist: confirmation email failed:', error);
+      return;
+    }
+    await db.from('signups').update({ confirmation_sent_at: new Date().toISOString() }).eq('id', row.id);
+  } catch (err) {
+    console.error('waitlist: confirmation email error:', err);
+  }
+}
+
+export async function POST(request) {
+  try {
+    const host = (request.headers.get('host') || '').toLowerCase();
+    const origin = request.headers.get('origin');
+    if (origin && hostOf(origin) !== host.split(':')[0]) {
+      return NextResponse.json({ error: 'Forbidden.' }, { status: 403 });
+    }
+
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json({ error: 'Invalid request.' }, { status: 400 });
+    }
+
+    const program = getWaitlistProgram(body.program);
+    if (!program) {
+      return NextResponse.json({ error: 'Unknown program.' }, { status: 404 });
+    }
+    if (!program.open) {
+      return NextResponse.json({ error: 'This waitlist is closed.' }, { status: 400 });
+    }
+
+    // Bot traps: honeypot filled, or submitted faster than a person could.
+    const elapsed = Number(body.elapsedMs);
+    if (body.website || !Number.isFinite(elapsed) || elapsed < MIN_FILL_MS) {
+      return OK();
+    }
+
+    const { valid, errors, isMinor } = validateWaitlistSignup(body, program);
+    if (!valid) {
+      return NextResponse.json({ error: 'Validation failed', errors }, { status: 400 });
+    }
+
+    const attribution = body.attribution && typeof body.attribution === 'object' ? body.attribution : {};
+    const userAgent = request.headers.get('user-agent') || '';
+    const utmSource = clip(attribution.utmSource, 60);
+    const srcParam = clip(attribution.src, 60);
+    const referrerHost = hostOf(attribution.referrer);
+    const country = (request.headers.get('x-vercel-ip-country') || '').toUpperCase();
+    const now = new Date().toISOString();
+
+    // Fields the person controls — also what a re-join after unsubscribing
+    // refreshes, since they are consenting again with this submission.
+    const profile = {
+      first_name: sanitize(body.firstName).slice(0, 60),
+      // Stored in E.164 (+254…); validated above, so this is never null when asked.
+      whatsapp_number: program.form.askWhatsapp
+        ? normalizeWhatsapp(body.whatsapp, program.form.whatsappDefaultCountryCode)
+        : null,
+      instagram_handle:
+        program.form.askInstagram && body.instagram
+          ? sanitize(body.instagram).replace(/^@/, '').toLowerCase()
+          : null,
+      position: body.position,
+      level: body.level,
+      age_band: body.ageBand,
+      early_access_opt_in: program.form.askEarlyAccess ? body.earlyAccess === true : false,
+      marketing_consent: true,
+      other_marketing_opt_in: body.otherMarketing === true,
+      consent_text_version: program.consent.version,
+      consented_at: now,
+      guardian_consent: isMinor ? true : null,
+    };
+
+    const row = {
+      ...profile,
+      program_slug: program.slug,
+      email: sanitize(body.email).toLowerCase(),
+      unsubscribe_token: crypto.randomBytes(32).toString('hex'),
+      source: classifySource({
+        param: utmSource || srcParam,
+        referrerHost,
+        userAgent,
+        siteHost: host.split(':')[0].replace(/^www\./, ''),
+      }),
+      utm_source: utmSource || srcParam,
+      utm_medium: clip(attribution.utmMedium, 60),
+      utm_campaign: clip(attribution.utmCampaign, 100),
+      utm_content: clip(attribution.utmContent, 100),
+      referrer_host: referrerHost,
+      in_app_browser: detectInAppBrowser(userAgent),
+      country: /^[A-Z]{2}$/.test(country) ? country : null,
+    };
+
+    const db = getWaitlistSupabase();
+    const SELECT = 'id, first_name, email, early_access_opt_in, marketing_consent, unsubscribe_token, unsubscribed_at, confirmation_sent_at';
+
+    const { data: inserted, error } = await db.from('signups').insert(row).select(SELECT).single();
+
+    if (!error) {
+      await sendConfirmation(db, program, inserted);
+      return OK();
+    }
+
+    // 23505 = unique_violation: this email is already on this list.
+    if (error.code !== '23505') {
+      console.error('waitlist: insert error:', error);
+      return NextResponse.json({ error: 'Something went wrong. Please try again.' }, { status: 500 });
+    }
+
+    const { data: existing, error: fetchError } = await db
+      .from('signups')
+      .select(SELECT)
+      .eq('program_slug', program.slug)
+      .eq('email', row.email)
+      .single();
+
+    if (fetchError || !existing) {
+      console.error('waitlist: duplicate lookup error:', fetchError);
+      return OK();
+    }
+
+    if (existing.unsubscribed_at || !existing.marketing_consent) {
+      // Re-joining after unsubscribing, or a row from before the consent box
+      // existed: this submission carries fresh, explicit consent, so record
+      // it with the fresh profile.
+      const { data: rejoined, error: updateError } = await db
+        .from('signups')
+        .update({ ...profile, unsubscribed_at: null })
+        .eq('id', existing.id)
+        .select(SELECT)
+        .single();
+      if (updateError) {
+        console.error('waitlist: re-join update error:', updateError);
+        return NextResponse.json({ error: 'Something went wrong. Please try again.' }, { status: 500 });
+      }
+      await sendConfirmation(db, program, rejoined);
+    } else if (!existing.confirmation_sent_at) {
+      await sendConfirmation(db, program, existing);
+    }
+
+    return OK();
+  } catch (err) {
+    console.error('waitlist error:', err);
+    return NextResponse.json({ error: 'Something went wrong. Please try again.' }, { status: 500 });
+  }
+}

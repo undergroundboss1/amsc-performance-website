@@ -1,16 +1,27 @@
 import ProgramDetail from '../../../components/ProgramDetail';
+import JsonLd from '../../../components/JsonLd';
 import { programsData } from '../../../lib/programs';
+import { getPlanDisplayPrice } from '../../../lib/plans';
+import { programServiceSchema, breadcrumbSchema } from '../../../lib/structured-data';
 
 export const metadata = {
   title: 'Performance Group Training',
-  description: 'Structured in-person training within a high-performance environment. Ksh 15,000/month at AMSC Performance.',
+  description: `Small-group sports performance and strength & conditioning training in Nairobi, Kenya — periodized, coach-led sessions for athletes. ${getPlanDisplayPrice('group')}/month.`,
+  alternates: { canonical: '/programs/group' },
   openGraph: {
     title: 'Performance Group Training | AMSC Performance',
     description: 'High-performance training in a structured group environment.',
+    url: '/programs/group',
     images: [{ url: '/images/program-group.jpg' }],
   },
 };
 
 export default function GroupPage() {
-  return <ProgramDetail program={{ ...programsData['group'], slug: 'group' }} />;
+  return (
+    <>
+      <JsonLd data={programServiceSchema('group')} />
+      <JsonLd data={breadcrumbSchema([['Home', '/'], ['Programs', '/programs'], [programsData['group'].name, '/programs/group']])} />
+      <ProgramDetail program={{ ...programsData['group'], slug: 'group' }} />
+    </>
+  );
 }

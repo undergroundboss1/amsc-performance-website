@@ -28,7 +28,8 @@ export default function Footer() {
               <Link href="/" className="block text-secondary text-sm hover:text-accent transition-colors font-body">Home</Link>
               <Link href="/programs" className="block text-secondary text-sm hover:text-accent transition-colors font-body">Programs</Link>
               <Link href="/philosophy" className="block text-secondary text-sm hover:text-accent transition-colors font-body">Philosophy</Link>
-              <Link href="/member-portal" className="block text-secondary text-sm hover:text-accent transition-colors font-body">Member Portal</Link>
+              <Link href="/faq" className="block text-secondary text-sm hover:text-accent transition-colors font-body">FAQ</Link>
+              <Link href="/member-portal"className="block text-secondary text-sm hover:text-accent transition-colors font-body">Member Portal</Link>
               <Link href="/join" className="block text-secondary text-sm hover:text-accent transition-colors font-body">Join</Link>
               <Link href="/privacy" className="block text-secondary text-sm hover:text-accent transition-colors font-body">Privacy Policy</Link>
               <Link href="/terms" className="block text-secondary text-sm hover:text-accent transition-colors font-body">Terms of Use</Link>
@@ -45,6 +46,9 @@ export default function Footer() {
               <Link href="/programs/consulting" className="block text-secondary text-sm hover:text-accent transition-colors font-body">Team Consulting</Link>
               <Link href="/programs/group" className="block text-secondary text-sm hover:text-accent transition-colors font-body">Group Training</Link>
               <Link href="/programs/youth" className="block text-secondary text-sm hover:text-accent transition-colors font-body">Youth Development</Link>
+              <Link href="/offpitch" className="block text-secondary text-sm hover:text-accent transition-colors font-body">
+                AMSC Off Pitch <span className="text-accent text-xs font-display font-bold tracking-wider uppercase ml-1">Waitlist</span>
+              </Link>
             </div>
           </div>
 

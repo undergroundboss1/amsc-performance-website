@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import AnimatedSection from '../../components/AnimatedSection';
+import { getPlanDisplayPrice } from '../../lib/plans';
 
 const programs = [
   {
@@ -9,7 +10,7 @@ const programs = [
     label: 'EXCLUSIVE.',
     name: 'Exclusive One-on-One',
     desc: "The highest level of coaching at AMSC — your coach's time and focus committed entirely to you.",
-    price: 'Ksh 50,000',
+    price: getPlanDisplayPrice('exclusive'),
     image: '/images/program-one-on-one.jpg',
     imagePosition: 'object-center',
   },
@@ -18,7 +19,7 @@ const programs = [
     label: 'INDIVIDUAL.',
     name: 'Individualized Coaching',
     desc: 'A programme built entirely around you, with hands-on coach-led sessions.',
-    price: 'Ksh 30,000',
+    price: getPlanDisplayPrice('one-on-one'),
     image: '/images/program-one-on-one.jpg',
     imagePosition: 'object-center',
   },
@@ -27,7 +28,7 @@ const programs = [
     label: 'STRUCTURED.',
     name: 'Performance Group Training',
     desc: 'Structured in-person training within a high-performance environment.',
-    price: 'Ksh 15,000',
+    price: getPlanDisplayPrice('group'),
     image: '/images/program-group.jpg',
     imagePosition: 'object-center',
   },
@@ -36,7 +37,7 @@ const programs = [
     label: 'FLEXIBLE.',
     name: 'Online Performance Training',
     desc: 'Structured performance programming for athletes and driven individuals training remotely.',
-    price: 'Ksh 12,000',
+    price: getPlanDisplayPrice('online'),
     image: '/images/program-online.jpg',
     imagePosition: 'object-[center_18%]',
   },
@@ -45,7 +46,7 @@ const programs = [
     label: 'DEVELOPMENTAL.',
     name: 'Youth Athletic Development',
     desc: 'Building athletic foundations for young athletes aged 10–15.',
-    price: 'Ksh 10,000',
+    price: getPlanDisplayPrice('youth'),
     image: '/images/youth-athlete-lunge.jpg',
     imagePosition: 'object-center',
   },
@@ -154,6 +155,57 @@ export default function ProgramsPage() {
         </AnimatedSection>
 
         <div className="max-w-7xl mx-auto space-y-6">
+          {/* AMSC Off Pitch — in build, waitlist open. Swap for a regular
+              program card (and a lib/programs.js entry) once it launches. */}
+          <AnimatedSection>
+            <div className="card bg-surface-light border border-accent/30 rounded-lg overflow-hidden grid grid-cols-1 md:grid-cols-3 relative">
+              <div className="aspect-video md:aspect-auto overflow-hidden relative min-h-[200px]">
+                <Image
+                  src="/images/athlete-james.jpg"
+                  alt="AMSC Off Pitch"
+                  fill
+                  sizes="(max-width: 768px) 100vw, 33vw"
+                  className="object-cover object-center"
+                />
+                <div className="absolute inset-0 bg-black/40" />
+                <div className="absolute inset-0 flex items-center justify-center p-6">
+                  <Image
+                    src="/images/offpitch/AMSC-OffPitch-lockup-on-dark.svg"
+                    alt=""
+                    width={680}
+                    height={215}
+                    unoptimized
+                    className="w-[70%] max-w-[260px] h-auto drop-shadow-lg"
+                  />
+                </div>
+                <span className="absolute top-4 left-4 bg-accent text-white font-display text-xs font-bold tracking-widest px-3 py-1 rounded uppercase">
+                  Coming Soon
+                </span>
+              </div>
+              <div className="p-8 md:col-span-2 flex flex-col justify-center">
+                <span className="text-accent font-display text-xs font-bold tracking-[0.25em]">
+                  OFF-SEASON.
+                </span>
+                <h3 className="font-display font-bold text-2xl tracking-widest mt-2 mb-3">AMSC Off Pitch</h3>
+                <p className="text-secondary text-sm leading-relaxed mb-4 font-body">
+                  A 16-week football off-season program you run yourself, with a brief for every week and every
+                  session so you always know what you are building and why. In build now.
+                </p>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-auto pt-4 border-t border-white/10">
+                  <p className="font-display text-lg font-bold text-white tracking-wider uppercase">
+                    Waitlist Open
+                  </p>
+                  <Link
+                    href="/offpitch"
+                    className="bg-accent text-white px-6 py-3 rounded-full font-display text-sm font-bold tracking-wider uppercase hover:bg-accent-dark transition-all duration-200 text-center whitespace-nowrap"
+                  >
+                    Join the Waitlist
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </AnimatedSection>
+
           {programs.map((program, i) => (
             <AnimatedSection key={program.slug} delay={i * 0.1}>
               <div className="card bg-surface-light border border-white/5 rounded-lg overflow-hidden grid grid-cols-1 md:grid-cols-3">

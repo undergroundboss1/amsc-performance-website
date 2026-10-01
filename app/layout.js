@@ -6,6 +6,9 @@ import CookieConsent from "../components/CookieConsent";
 import { ConsentProvider } from "../components/ConsentContext";
 import ScrollProgressBar from "../components/ScrollProgressBar";
 import GoogleAnalytics from "../components/GoogleAnalytics";
+import JsonLd from "../components/JsonLd";
+import { SITE_URL } from "../lib/business";
+import { organizationSchema, websiteSchema } from "../lib/structured-data";
 
 const barlow = Barlow({
   subsets: ["latin"],
@@ -21,7 +24,6 @@ const barlowCondensed = Barlow_Condensed({
   display: "swap",
 });
 
-const SITE_URL = 'https://amscperformance.com';
 
 export const metadata = {
   metadataBase: new URL(SITE_URL),
@@ -47,9 +49,9 @@ export const metadata = {
     'AMSC Combine',
     'personal trainer Nairobi',
   ],
-  alternates: {
-    canonical: SITE_URL,
-  },
+  // No site-wide canonical: a canonical set here is inherited by every page
+  // that doesn't override it, which tells crawlers all pages duplicate the
+  // homepage. Pages set their own canonical instead.
   openGraph: {
     type: 'website',
     locale: 'en_KE',
@@ -88,78 +90,8 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en" className={`${barlow.variable} ${barlowCondensed.variable}`}>
       <head>
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
-              '@context': 'https://schema.org',
-              '@type': ['LocalBusiness', 'SportsClub'],
-              name: 'AMSC Performance',
-              alternateName: 'AMSC',
-              description: 'East and Central Africa\'s premier sports performance institution — elite strength & conditioning, athlete monitoring, and performance testing based in Nairobi, Kenya.',
-              url: 'https://amscperformance.com',
-              logo: 'https://amscperformance.com/images/amsc-logo-hero.png',
-              image: 'https://amscperformance.com/images/amsc-logo-hero.png',
-              telephone: '+254796677414',
-              address: {
-                '@type': 'PostalAddress',
-                streetAddress: 'The Courtyard, Vanga Road',
-                addressLocality: 'Nairobi',
-                addressRegion: 'Nairobi County',
-                addressCountry: 'KE',
-              },
-              geo: {
-                '@type': 'GeoCoordinates',
-                latitude: '-1.2921',
-                longitude: '36.8219',
-              },
-              areaServed: [
-                { '@type': 'City', name: 'Nairobi' },
-                { '@type': 'Country', name: 'Kenya' },
-                { '@type': 'Place', name: 'East Africa' },
-              ],
-              sameAs: [
-                'https://instagram.com/amscperformance',
-              ],
-              hasOfferCatalog: {
-                '@type': 'OfferCatalog',
-                name: 'Sports Performance Training Programs',
-                itemListElement: [
-                  {
-                    '@type': 'Offer',
-                    itemOffered: { '@type': 'Service', name: 'Exclusive One-on-One Coaching', description: 'The highest level of coaching at AMSC — a coach fully dedicated to one athlete, in Nairobi.' },
-                    price: '50000',
-                    priceCurrency: 'KES',
-                  },
-                  {
-                    '@type': 'Offer',
-                    itemOffered: { '@type': 'Service', name: 'Individualized Coaching', description: 'An individualized programme with hands-on coach-led sessions for athletes in Nairobi.' },
-                    price: '30000',
-                    priceCurrency: 'KES',
-                  },
-                  {
-                    '@type': 'Offer',
-                    itemOffered: { '@type': 'Service', name: 'Performance Group Training', description: 'Small-group athletic development training in Nairobi.' },
-                    price: '15000',
-                    priceCurrency: 'KES',
-                  },
-                  {
-                    '@type': 'Offer',
-                    itemOffered: { '@type': 'Service', name: 'Online Performance Training', description: 'Remote strength & conditioning programming for athletes across Kenya and East Africa.' },
-                    price: '12000',
-                    priceCurrency: 'KES',
-                  },
-                  {
-                    '@type': 'Offer',
-                    itemOffered: { '@type': 'Service', name: 'Youth Athletic Development', description: 'Structured athletic development for youth athletes in Nairobi.' },
-                    price: '10000',
-                    priceCurrency: 'KES',
-                  },
-                ],
-              },
-            }),
-          }}
-        />
+        <JsonLd data={organizationSchema()} />
+        <JsonLd data={websiteSchema()} />
       </head>
       <body className="font-body antialiased bg-background text-text">
         <ConsentProvider>
