@@ -6,7 +6,8 @@ Admin: `/admin` → **Waitlist** tab (counts, sources, audience breakdown, CSV e
 ## Go-live steps (one time)
 
 1. **Database.** Supabase → SQL Editor → run `scripts/supabase-waitlist-schema-v1.sql`, then
-   `scripts/supabase-waitlist-schema-v2.sql` (consent, unsubscribe, email tracking). Both are safe to re-run.
+   `-v2.sql` (consent, unsubscribe, email tracking), then `-v3.sql` (WhatsApp number). All are safe to re-run.
+   Each must be applied before deploying the code that uses it.
 2. **Expose the schema.** Supabase → Settings → API (Data API) → Exposed schemas → add `waitlist`.
    Signups fail with a schema error until this is done.
 3. **Check.** In the SQL editor:
@@ -34,6 +35,7 @@ No new environment variables are required. The page uses the existing `NEXT_PUBL
 | Close signups without removing the page | `open: false` |
 | Change consent wording | edit `consent.marketing` / `consent.otherMarketing` / `consent.guardian` **and** bump `consent.version` |
 | Turn off the Instagram or early-access questions | `form.askInstagram` / `form.askEarlyAccess` |
+| Turn off the WhatsApp question, or change the default country code | `form.askWhatsapp` / `form.whatsappDefaultCountryCode` |
 
 ## Adding a future program (e.g. AMSC Off Court)
 
@@ -66,9 +68,22 @@ No database change is needed. The admin tab shows a program picker once there is
   `unsubscribe_token` (`https://amscperformance.com/waitlist/unsubscribe?token=<token>`), or your email tool's own
   unsubscribe, and copy those opt-outs back.
 
+## WhatsApp community
+
+- The form requires a WhatsApp number. Local numbers (`0712 345 678`) are read as Kenyan and stored as
+  `+254712345678`; anyone outside Kenya types `+` and their country code. The admin tab links each number to
+  a WhatsApp chat (`wa.me`), and the CSV export includes it.
+- The consent box covers email and WhatsApp messages and being added to the early access WhatsApp community.
+- **Adding people:** only add numbers where `marketing_consent = true AND unsubscribed_at IS NULL`.
+- **Unsubscribes:** the unsubscribe page tells people they'll be removed from the community. WhatsApp can't be
+  updated automatically, so check the admin tab for "Unsubscribed" rows and remove those numbers by hand.
+  `scripts/supabase-waitlist-schema-v3.sql` has ready-made queries for both lists.
+- **Under-18s:** the community mixes ages, and members may see each other's numbers depending on the community
+  settings. Use announcement-only settings, and decide whether under-18s join the community at all.
+
 ## Personal data
 
-- Stored: first name, email, position, level, age band, optional Instagram handle, early-access opt-in,
+- Stored: first name, email, WhatsApp number, position, level, age band, optional Instagram handle, early-access opt-in,
   consents and their wording version, guardian confirmation (under-18s), traffic source, UTM tags, referrer
   host and country. **Not stored:** IP address, full user agent, full referrer URL.
 - Attribution needs no cookies and does not depend on Google Analytics consent.

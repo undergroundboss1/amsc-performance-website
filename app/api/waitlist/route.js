@@ -4,6 +4,7 @@ import { getWaitlistSupabase } from '../../../lib/supabase';
 import { getWaitlistProgram } from '../../../lib/waitlists';
 import { sanitize, validateWaitlistSignup } from '../../../lib/validators';
 import { classifySource, detectInAppBrowser } from '../../../lib/waitlist-source';
+import { normalizeWhatsapp } from '../../../lib/waitlist-phone';
 import { sendEmail, buildWaitlistConfirmationEmail } from '../../../lib/email';
 import { SITE_URL, business } from '../../../lib/business';
 
@@ -141,6 +142,10 @@ export async function POST(request) {
     // refreshes, since they are consenting again with this submission.
     const profile = {
       first_name: sanitize(body.firstName).slice(0, 60),
+      // Stored in E.164 (+254…); validated above, so this is never null when asked.
+      whatsapp_number: program.form.askWhatsapp
+        ? normalizeWhatsapp(body.whatsapp, program.form.whatsappDefaultCountryCode)
+        : null,
       instagram_handle:
         program.form.askInstagram && body.instagram
           ? sanitize(body.instagram).replace(/^@/, '').toLowerCase()

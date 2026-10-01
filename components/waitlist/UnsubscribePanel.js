@@ -87,7 +87,7 @@ export default function UnsubscribePanel({ token, state: initialState, email, pr
             <Icon tone="neutral">{MAIL}</Icon>
             <h1 className="font-display font-black text-3xl md:text-4xl tracking-widest mb-4">UNSUBSCRIBE</h1>
             <p className="text-secondary font-body text-base mb-2">
-              Stop all emails about <strong className="text-white">{programName}</strong> and other AMSC programs to
+              Stop all emails and WhatsApp messages about <strong className="text-white">{programName}</strong> and other AMSC programs for
             </p>
             <p className="font-display text-white text-lg tracking-wider mb-10">{email}</p>
 
@@ -131,7 +131,8 @@ export default function UnsubscribePanel({ token, state: initialState, email, pr
               {state === 'done' ? "YOU'RE UNSUBSCRIBED" : 'ALREADY UNSUBSCRIBED'}
             </h1>
             <p className="text-secondary font-body text-base max-w-md mx-auto mb-10">
-              {email} will not receive any more {programName} emails from AMSC Performance.
+              {email} will not receive any more {programName} emails or WhatsApp messages from AMSC Performance.
+              If you&apos;re in the WhatsApp community, we&apos;ll remove you, or you can leave at any time.
             </p>
             <p className="text-secondary font-body text-sm">
               Changed your mind?{' '}

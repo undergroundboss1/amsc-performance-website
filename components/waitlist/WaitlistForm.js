@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { business } from '../../lib/business';
+import { normalizeWhatsapp } from '../../lib/waitlist-phone';
 
 /**
  * WaitlistForm — join form + confirmation state for a program waitlist.
@@ -26,6 +27,7 @@ const labelClass = 'block font-display text-xs font-semibold tracking-widest upp
 const EMPTY = {
   firstName: '',
   email: '',
+  whatsapp: '',
   position: '',
   level: '',
   ageBand: '',
@@ -43,6 +45,9 @@ function validate(values, program) {
   const e = {};
   if (!values.firstName.trim()) e.firstName = 'Enter your first name.';
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email.trim())) e.email = 'Enter a valid email address.';
+  if (program.form.askWhatsapp && !normalizeWhatsapp(values.whatsapp, program.form.whatsappDefaultCountryCode)) {
+    e.whatsapp = values.whatsapp.trim() ? 'Check your WhatsApp number.' : 'Enter your WhatsApp number.';
+  }
   if (!values.position) e.position = 'Pick your position.';
   if (!values.level) e.level = 'Pick your level.';
   const band = program.form.ageBands.find((b) => b.value === values.ageBand);
@@ -161,7 +166,9 @@ function Confirmation({ program, done }) {
   const steps = [
     { title: 'Check your inbox', body: `We've sent a confirmation to ${done.email}. If it isn't there in a few minutes, check your spam or promotions folder.` },
     { title: 'Follow the journey', body: `${program.name} is being built in public. The methodology, the sessions and the build all go up on Instagram first.` },
-    { title: 'Be first in', body: `When ${program.name} opens, the waitlist hears first.` },
+    { title: 'Be first in', body: program.form.askWhatsapp
+      ? `Early access community invites and launch news come to your WhatsApp and inbox before anyone else hears.`
+      : `When ${program.name} opens, the waitlist hears first.` },
   ];
 
   return (
@@ -272,6 +279,9 @@ export default function WaitlistForm({ program }) {
     }
   }, [done]);
 
+  const waPreview = program.form.askWhatsapp
+    ? normalizeWhatsapp(values.whatsapp, program.form.whatsappDefaultCountryCode)
+    : null;
   const selectedBand = program.form.ageBands.find((b) => b.value === values.ageBand);
   const isMinor = !!selectedBand?.minor;
 
@@ -303,6 +313,7 @@ export default function WaitlistForm({ program }) {
           program: program.slug,
           firstName: values.firstName.trim(),
           email: values.email.trim(),
+          whatsapp: values.whatsapp.trim(),
           position: values.position,
           level: values.level,
           ageBand: values.ageBand,
@@ -396,6 +407,36 @@ export default function WaitlistForm({ program }) {
                 <FieldError id="wl-email-err">{errors.email}</FieldError>
               </div>
             </div>
+
+            {form.askWhatsapp && (
+              <div>
+                <label htmlFor="wl-wa" className={labelClass}>
+                  WhatsApp Number <span className="text-accent">*</span>
+                </label>
+                <input
+                  id="wl-wa"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  maxLength={20}
+                  placeholder="0712 345 678"
+                  value={values.whatsapp}
+                  onChange={(e) => set('whatsapp', e.target.value)}
+                  disabled={submitting}
+                  aria-invalid={errors.whatsapp ? 'true' : undefined}
+                  aria-describedby={errors.whatsapp ? 'wl-wa-err' : 'wl-wa-hint'}
+                  className={`${inputClass} ${errors.whatsapp ? 'border-red-500/50' : 'border-white/10'}`}
+                />
+                {!errors.whatsapp && (
+                  <p id="wl-wa-hint" className="text-white/40 text-xs font-body mt-2">
+                    {waPreview
+                      ? <>We&apos;ll message <span className="text-white/70">{waPreview}</span> on WhatsApp.</>
+                      : 'Outside Kenya? Start with + and your country code.'}
+                  </p>
+                )}
+                <FieldError id="wl-wa-err">{errors.whatsapp}</FieldError>
+              </div>
+            )}
 
             <PillGroup name="position" legend="Position" options={form.positions} value={values.position} onChange={(v) => set('position', v)} error={errors.position} />
             <PillGroup name="level" legend="Level" options={form.levels} value={values.level} onChange={(v) => set('level', v)} error={errors.level} />

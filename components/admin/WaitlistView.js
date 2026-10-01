@@ -148,7 +148,7 @@ export default function WaitlistView({ adminKey }) {
     const q = query.trim().toLowerCase();
     if (!q) return rows;
     return rows.filter((r) =>
-      [r.first_name, r.email, r.instagram_handle].some((f) => f && f.toLowerCase().includes(q))
+      [r.first_name, r.email, r.instagram_handle, r.whatsapp_number].some((f) => f && f.toLowerCase().includes(q))
     );
   }, [data, query]);
 
@@ -209,7 +209,7 @@ export default function WaitlistView({ adminKey }) {
             </h3>
             <input
               type="search"
-              placeholder="Search name, email, @handle"
+              placeholder="Search name, email, number, @handle"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               style={{ background: SURFACE, border: `1px solid ${LINE}`, color: INK, borderRadius: '6px', padding: '7px 10px', fontSize: '13px', width: '220px', maxWidth: '55%' }}
@@ -223,7 +223,7 @@ export default function WaitlistView({ adminKey }) {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                 <thead>
                   <tr style={{ background: SURFACE, textAlign: 'left', color: INK_2 }}>
-                    {['Joined', 'Name', 'Email', 'Status', 'Instagram', 'Position', 'Level', 'Age', 'Source', 'Early'].map((h) => (
+                    {['Joined', 'Name', 'Email', 'WhatsApp', 'Status', 'Instagram', 'Position', 'Level', 'Age', 'Source', 'Early'].map((h) => (
                       <th key={h} style={{ padding: '8px 10px', fontWeight: 600, whiteSpace: 'nowrap', borderBottom: `1px solid ${LINE}` }}>{h}</th>
                     ))}
                   </tr>
@@ -234,6 +234,11 @@ export default function WaitlistView({ adminKey }) {
                       <td style={{ padding: '8px 10px', whiteSpace: 'nowrap', color: INK_2 }}>{formatDateTime(r.created_at)}</td>
                       <td style={{ padding: '8px 10px' }}>{r.first_name}</td>
                       <td style={{ padding: '8px 10px' }}>{r.email}</td>
+                      <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>
+                        {r.whatsapp_number ? (
+                          <a href={`https://wa.me/${r.whatsapp_number.replace('+', '')}`} target="_blank" rel="noopener noreferrer" style={{ color: INK }}>{r.whatsapp_number}</a>
+                        ) : '—'}
+                      </td>
                       <td style={{ padding: '8px 10px', whiteSpace: 'nowrap', color: r.unsubscribed_at ? INK_3 : r.marketing_consent ? '#86efac' : '#fbbf24' }}>
                         {r.unsubscribed_at ? 'Unsubscribed' : r.marketing_consent ? `Subscribed${r.other_marketing_opt_in ? ' +' : ''}` : 'No consent (v1)'}
                       </td>
