@@ -24,7 +24,7 @@ class WidgetErrorBoundary extends Component {
   }
 }
 
-export default function InstagramFeed() {
+export default function InstagramFeed({ subtitle = 'Stay updated with the latest from AMSC Performance.' } = {}) {
   const { consent } = useConsent();
   const allowed = consent === 'accepted';
 
@@ -35,7 +35,7 @@ export default function InstagramFeed() {
           FOLLOW THE JOURNEY
         </h2>
         <p className="text-secondary text-base max-w-2xl mx-auto font-body">
-          Stay updated with the latest from AMSC Performance.
+          {subtitle}
         </p>
       </div>
       <div className="max-w-7xl mx-auto">
