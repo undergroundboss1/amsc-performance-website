@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef } from 'react';
+import Image from 'next/image';
 import { motion, useReducedMotion } from 'framer-motion';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
@@ -138,13 +139,26 @@ export default function WaitlistPage({ program }) {
             </span>
           </motion.div>
 
-          <motion.h1
-            variants={heroChild}
-            className="font-display font-black text-5xl sm:text-6xl md:text-8xl tracking-widest text-white mt-8 mb-6 drop-shadow-lg"
-          >
-            {hero.headline}
-            {hero.headlineAccent && <> <span className="text-accent">{hero.headlineAccent}</span></>}
-          </motion.h1>
+          {hero.logo ? (
+            <motion.h1 variants={heroChild} className="mt-8 mb-6">
+              <Image
+                src={hero.logo.src}
+                alt={hero.headline}
+                width={hero.logo.width}
+                height={hero.logo.height}
+                priority
+                unoptimized
+                className="mx-auto w-[300px] sm:w-[420px] md:w-[560px] h-auto drop-shadow-lg"
+              />
+            </motion.h1>
+          ) : (
+            <motion.h1
+              variants={heroChild}
+              className="font-display font-black text-5xl sm:text-6xl md:text-8xl tracking-widest text-white mt-8 mb-6 drop-shadow-lg"
+            >
+              {hero.headline}
+            </motion.h1>
+          )}
 
           {hero.lede && (
             <motion.p variants={heroChild} className="text-white/70 text-lg md:text-xl max-w-2xl mx-auto font-body mb-4">
