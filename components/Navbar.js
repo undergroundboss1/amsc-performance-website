@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 const links = [
   { href: '/', label: 'Home' },
   { href: '/programs', label: 'Programs' },
+  { href: '/offpitch', label: 'Off Pitch', badge: 'New' },
   { href: '/philosophy', label: 'Philosophy' },
   { href: '/reports', label: 'Reports' },
   { href: '/member-portal', label: 'Member Portal' },
@@ -84,7 +85,7 @@ export default function Navbar() {
         </Link>
 
         {/* Desktop Nav Links */}
-        <div className="hidden md:flex items-center gap-10">
+        <div className="hidden md:flex items-center gap-6 lg:gap-10">
           {links.map((link) => (
             <Link
               key={link.href}
@@ -96,6 +97,11 @@ export default function Navbar() {
               }`}
             >
               {link.label}
+              {link.badge && (
+                <span className="absolute -top-2.5 -right-7 bg-accent text-white text-[8px] font-bold tracking-wider px-1.5 py-[1px] rounded-full leading-tight">
+                  {link.badge}
+                </span>
+              )}
               <span
                 className={`absolute -bottom-1 left-0 h-[2px] bg-accent transition-all duration-300 ${
                   pathname === link.href ? 'w-full' : 'w-0 group-hover:w-full'
@@ -174,6 +180,11 @@ export default function Navbar() {
                       <span className="w-1 h-1 rounded-full bg-accent flex-shrink-0" />
                     )}
                     {link.label}
+                    {link.badge && (
+                      <span className="bg-accent text-white text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-full">
+                        {link.badge}
+                      </span>
+                    )}
                   </Link>
                 </motion.div>
               ))}
