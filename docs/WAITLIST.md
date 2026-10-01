@@ -27,6 +27,17 @@ Admin: `/admin` → **Waitlist** tab (counts, sources, audience breakdown, CSV e
 No new environment variables are required. The page uses the existing `NEXT_PUBLIC_SUPABASE_URL`,
 `SUPABASE_SERVICE_ROLE_KEY` and `RESEND_API_KEY`.
 
+## Links to the waitlist from the main site
+
+`/offpitch` is linked from four places. Update or remove them when Off Pitch launches:
+
+| Where | File |
+|---|---|
+| Navbar link "Off Pitch" with a "New" badge (desktop and mobile menu) | `components/Navbar.js` (`links`) |
+| Homepage strip under the hero buttons | `app/page.js` (search "Off Pitch waitlist strip") |
+| "Coming soon" card at the top of the Programs list | `app/programs/page.js` (search "AMSC Off Pitch") |
+| Footer, Programs column | `components/Footer.js` |
+
 ## Day-to-day edits (all in `lib/waitlists.js`)
 
 | Change | Field |
