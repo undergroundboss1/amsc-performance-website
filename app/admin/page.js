@@ -39,6 +39,33 @@ function formatKES(amount) {
   return `KES ${Number(amount).toLocaleString('en-KE')}`;
 }
 
+/**
+ * Reduce a phone number to its comparable tail so search matches regardless of
+ * how it was typed in.
+ *
+ * The same Kenyan number is stored several ways across this table — +254 712…,
+ * 0712…, with spaces, dashes or brackets — because some rows came from the
+ * application form and others from historical imports. A plain substring match
+ * on the raw text fails on the one case that matters most: searching "0712…"
+ * against a stored "+254712…", where the leading 0 and the 254 never line up.
+ *
+ * Dropping to the last 9 digits (the Kenyan subscriber number) makes every
+ * stored form converge, so a partial number finds the client whichever way
+ * either side was written.
+ *
+ * Not normalizeWhatsapp() from lib/waitlist-phone.js, despite the overlap:
+ * that one validates a complete number into E.164 at write time and returns
+ * null for anything it can't vouch for. Both halves of the job here are
+ * things it correctly rejects — a half-typed query, and the truncated 3-to-8
+ * digit numbers left by the historical imports — so reusing it would blank
+ * out search for exactly the rows that most need finding by name.
+ */
+function phoneSearchTail(raw) {
+  const digits = String(raw || '').replace(/\D/g, '');
+  if (digits.length > 9) return digits.slice(-9);
+  return digits.replace(/^0+/, '');
+}
+
 function paymentMethodLabel(method) {
   const labels = {
     paystack_card: 'Card (Paystack)',
@@ -3656,6 +3683,9 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState('pending_review');
   const [trainingFilter, setTrainingFilter] = useState('active');
+  const [search, setSearch] = useState('');
+  const [planFilter, setPlanFilter] = useState('all');
+  const [paymentFilter, setPaymentFilter] = useState('all');
   const [activeSection, setActiveSection] = useState('applications');
   const [activeTab, setActiveTab] = useState('applications');
   const [selectedClient, setSelectedClient] = useState(null);
@@ -3811,15 +3841,73 @@ export default function AdminPage() {
     { value: 'inactive', label: 'Paused' },
   ];
 
+  const planFilterOptions = [
+    { value: 'all', label: 'All Plans' },
+    ...trainingPlans.map(p => ({ value: p.id, label: p.name })),
+  ];
+
+  const paymentFilterOptions = [
+    { value: 'all',      label: 'Any Payment State' },
+    { value: 'overdue',  label: 'Overdue' },
+    { value: 'due_soon', label: 'Due within 5 days' },
+    { value: 'current',  label: 'Up to date' },
+  ];
+
+  // Searching has to span every client, not just whichever status pill happens
+  // to be selected. Otherwise typing the name of someone you know exists comes
+  // back empty purely because they're approved and the pill still says Pending
+  // Review — which reads as "this client is gone", the worst possible answer
+  // from a search box. So the moment a query is typed, widen the status to All.
+  function handleSearchChange(value) {
+    setSearch(value);
+    if (value.trim() && filter !== 'all') setFilter('all');
+  }
+
+  function clearFilters() {
+    setSearch('');
+    setPlanFilter('all');
+    setPaymentFilter('all');
+    setTrainingFilter('all');
+  }
+
+  const query = search.trim().toLowerCase();
+  const queryPhone = phoneSearchTail(search);
+
   // Apply training status filter on top of the status-filtered client list
   // 'active' = has ever paid (last_paid_at set) + not paused — real members on the floor
   // An active member can be late on payments; an unapid applicant is not a member yet
   const visibleClients = clients.filter(c => {
-    if (trainingFilter === 'all') return true;
-    if (trainingFilter === 'active') return !!c.last_paid_at && (c.training_status || 'active') !== 'inactive';
-    if (trainingFilter === 'inactive') return (c.training_status || 'active') === 'inactive';
+    if (trainingFilter === 'active' && !(!!c.last_paid_at && (c.training_status || 'active') !== 'inactive')) return false;
+    if (trainingFilter === 'inactive' && (c.training_status || 'active') !== 'inactive') return false;
+
+    if (planFilter !== 'all' && c.selected_plan !== planFilter) return false;
+
+    if (paymentFilter !== 'all') {
+      // Same billing util the cards and reminders use, so a client filtered as
+      // overdue here is overdue by exactly the definition shown everywhere else.
+      const timing = getPaymentTiming(c);
+      // Paused clients have no live billing clock, so they belong to none of
+      // these buckets rather than silently landing in "up to date".
+      if (!timing || timing.paused) return false;
+      if (paymentFilter === 'overdue'  && !(timing.daysOverdue > 0)) return false;
+      if (paymentFilter === 'due_soon' && (timing.daysOverdue > 0 || timing.daysUntilDue > 5)) return false;
+      if (paymentFilter === 'current'  && (timing.daysOverdue > 0 || timing.daysUntilDue <= 5)) return false;
+    }
+
+    if (query) {
+      const text = [c.full_name, c.email, c.sport, c.selected_plan, c.amsc_metrics_athlete_id]
+        .filter(Boolean).join(' ').toLowerCase();
+      const textMatch = text.includes(query);
+      // Only treat the query as a phone number once it's long enough to mean
+      // something — below 3 digits almost every number matches.
+      const phoneMatch = queryPhone.length >= 3 && phoneSearchTail(c.phone).includes(queryPhone);
+      if (!textMatch && !phoneMatch) return false;
+    }
+
     return true;
   });
+
+  const filtersActive = Boolean(query) || planFilter !== 'all' || paymentFilter !== 'all' || trainingFilter !== 'all';
 
   return (
     <section className="py-8 px-4 sm:px-6 bg-background min-h-screen pt-20">
@@ -4019,6 +4107,62 @@ export default function AdminPage() {
                   ))}
                 </div>
 
+                {/* ── Search & refine ── */}
+                <div className="mb-6">
+                  <div className="relative mb-3">
+                    <svg
+                      className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/25 pointer-events-none"
+                      fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
+                    </svg>
+                    <input
+                      type="text"
+                      value={search}
+                      onChange={(e) => handleSearchChange(e.target.value)}
+                      placeholder="Search name, email or phone…"
+                      className="w-full bg-surface border border-white/10 rounded-lg pl-10 pr-4 py-3 text-white font-body text-sm placeholder:text-white/25 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors"
+                    />
+                  </div>
+
+                  <div className="flex gap-2 flex-wrap items-center">
+                    <select
+                      value={planFilter}
+                      onChange={(e) => setPlanFilter(e.target.value)}
+                      className="bg-surface border border-white/10 rounded-lg px-3 py-2 text-white font-body text-xs focus:outline-none focus:border-accent cursor-pointer"
+                    >
+                      {planFilterOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+
+                    <select
+                      value={paymentFilter}
+                      onChange={(e) => setPaymentFilter(e.target.value)}
+                      className="bg-surface border border-white/10 rounded-lg px-3 py-2 text-white font-body text-xs focus:outline-none focus:border-accent cursor-pointer"
+                    >
+                      {paymentFilterOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+
+                    {filtersActive && (
+                      <button
+                        onClick={clearFilters}
+                        className="px-3 py-2 rounded-lg border border-white/10 text-secondary font-display text-[10px] font-bold tracking-wider uppercase hover:border-white/25 hover:text-white transition-all cursor-pointer"
+                      >
+                        Clear
+                      </button>
+                    )}
+
+                    <span className="ml-auto text-white/30 text-xs font-body whitespace-nowrap">
+                      {visibleClients.length} of {clients.length}
+                    </span>
+                  </div>
+
+                  {query && (
+                    <p className="text-white/30 text-xs font-body mt-2">
+                      Searching all clients, every status.
+                    </p>
+                  )}
+                </div>
+
                 {loading ? (
                   <div className="text-center py-12">
                     <span className="inline-block w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin mb-4" />
@@ -4026,9 +4170,29 @@ export default function AdminPage() {
                   </div>
                 ) : visibleClients.length === 0 ? (
                   <div className="text-center py-12 bg-surface border border-white/5 rounded-xl">
-                    <p className="text-secondary font-body text-sm">
-                      No {trainingFilter !== 'all' ? `${trainingFilter} ` : ''}{filter === 'all' ? '' : filter.replace('_', ' ')} clients found.
-                    </p>
+                    {/* When something is being filtered on, say so and offer the
+                        way out — an unqualified "no clients found" next to an
+                        active search reads as though the records are missing. */}
+                    {filtersActive ? (
+                      <>
+                        <p className="text-secondary font-body text-sm mb-1">
+                          No clients match {query ? <>“{search.trim()}”</> : 'these filters'}.
+                        </p>
+                        <p className="text-white/25 font-body text-xs mb-4">
+                          {clients.length} client{clients.length === 1 ? '' : 's'} loaded.
+                        </p>
+                        <button
+                          onClick={clearFilters}
+                          className="px-4 py-2 rounded-full border border-white/10 text-secondary font-display text-[10px] font-bold tracking-wider uppercase hover:border-white/25 hover:text-white transition-all cursor-pointer"
+                        >
+                          Clear Filters
+                        </button>
+                      </>
+                    ) : (
+                      <p className="text-secondary font-body text-sm">
+                        No {filter === 'all' ? '' : `${filter.replace('_', ' ')} `}clients found.
+                      </p>
+                    )}
                   </div>
                 ) : (
                   visibleClients.map((client) => (

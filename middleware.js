@@ -94,6 +94,9 @@ export const config = {
     '/api/payments/paystack',
     '/api/camp/register',
     '/api/camp/pay',
+    // Admin, not public — but the LIMITS entry above only takes effect for
+    // paths listed here, so without this line the cap was never applied.
+    '/api/admin/send-payment-email',
     '/api/waitlist',
     '/api/waitlist/unsubscribe',
     // Note: /monitoring is intentionally excluded — it's the Sentry tunnel route
