@@ -14,7 +14,7 @@ import { SOURCE_LABELS } from '../../../../lib/waitlist-source';
  */
 
 const COLUMNS = [
-  'id', 'created_at', 'first_name', 'email', 'instagram_handle',
+  'id', 'created_at', 'first_name', 'email', 'whatsapp_number', 'instagram_handle',
   'position', 'level', 'age_band', 'early_access_opt_in', 'guardian_consent',
   'marketing_consent', 'other_marketing_opt_in', 'consent_text_version', 'consented_at',
   'unsubscribed_at', 'confirmation_sent_at', 'source', 'utm_source', 'utm_medium', 'utm_campaign',
@@ -98,10 +98,13 @@ function summarize(rows, program) {
 }
 
 // Prefix cells that a spreadsheet would run as a formula (CSV injection).
+// E.164 phone numbers (+254712345678) are exempt: they are validated digits,
+// can't carry a formula, and a leading ' would break pasting them into
+// WhatsApp or importing them as contacts.
 function csvCell(v) {
   if (v === null || v === undefined) return '';
   let s = String(v);
-  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  if (/^[=+\-@\t\r]/.test(s) && !/^\+\d{8,15}$/.test(s)) s = `'${s}`;
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 

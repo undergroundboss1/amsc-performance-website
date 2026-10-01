@@ -8,7 +8,7 @@ export default function PrivacyPage() {
     <section className="min-h-screen bg-background py-24 px-6">
       <div className="max-w-3xl mx-auto">
         <h1 className="font-display text-4xl md:text-5xl font-bold text-white mb-4">Privacy Policy</h1>
-        <p className="text-secondary text-sm mb-12">Last updated: 30 September 2026</p>
+        <p className="text-secondary text-sm mb-12">Last updated: 1 October 2026</p>
 
         <div className="prose-legal space-y-10 text-secondary text-sm leading-relaxed font-body">
           <div>
@@ -60,25 +60,29 @@ export default function PrivacyPage() {
 
             <h3 className="font-display text-base font-bold text-white mt-4 mb-2">c) Program Waitlists (e.g. AMSC Off Pitch)</h3>
             <p>
-              When you join a program waitlist, we collect your first name, email address, playing position, level
+              When you join a program waitlist, we collect your first name, email address, WhatsApp number, playing position, level
               and age range, and, if you choose to give them, your Instagram handle and whether you want to be
               considered for early access. We also record how you reached the page (for example, the Instagram app or a
               link with a campaign tag), the website that referred you, and your country as detected from your
               connection. We do not store your IP address.
             </p>
             <p className="mt-2">
-              We only email you with your consent. Joining a waitlist requires ticking a box agreeing to receive
-              emails about that program (build updates, early access and launch news). A separate, optional box lets
-              you also receive emails about other AMSC Performance programs and services. We record which wording you
-              agreed to and when. For anyone under 18, we also ask for confirmation that a parent or guardian has
+              We only contact you with your consent. Joining a waitlist requires ticking a box agreeing to be
+              contacted by email and WhatsApp about that program (build updates, early access and launch news) and to
+              have your number added to that program&apos;s early access WhatsApp community. A separate, optional box
+              lets you also be contacted about other AMSC Performance programs and services. We record which wording
+              you agreed to and when. For anyone under 18, we also ask for confirmation that a parent or guardian has
               agreed before they join.
             </p>
             <p className="mt-2">
               Every email we send includes an Unsubscribe link. Using it stops all further waitlist and marketing
-              emails straight away; we keep a record that you unsubscribed so that you are not emailed again.
-              Waitlist data is stored with our database provider, Supabase, and emails are sent through Resend. Both
-              act as processors on our behalf and may store data on servers outside Kenya. Waitlist data is only
-              accessible to AMSC staff.
+              emails and WhatsApp messages; we keep a record that you unsubscribed so that you are not contacted
+              again, and we remove you from the WhatsApp community. You can also leave the WhatsApp community, or ask
+              us to stop messaging you there, at any time. WhatsApp is operated by Meta: other members of a WhatsApp
+              community may be able to see your number and profile depending on the community&apos;s settings and
+              your own WhatsApp privacy settings. Waitlist data is stored with our database provider, Supabase, and
+              emails are sent through Resend. Both act as processors on our behalf and may store data on servers
+              outside Kenya. Waitlist data is only accessible to AMSC staff.
             </p>
 
             <h3 className="font-display text-base font-bold text-white mt-4 mb-2">d) Hosting & Server Logs (Vercel)</h3>
@@ -124,7 +128,7 @@ export default function PrivacyPage() {
             <p>
               Application data submitted through Tally.so is retained for as long as necessary to process your
               application and for a reasonable period thereafter for record-keeping. You may unsubscribe from our
-              emails at any time using the link in any email, and you may request deletion of your data at any time
+              emails and WhatsApp messages at any time using the link in any email, and you may request deletion of your data at any time
               by contacting us.
             </p>
           </div>
