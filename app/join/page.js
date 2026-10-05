@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import Link from 'next/link';
 import { trainingPlans, getPlanById } from '../../lib/plans';
+import { validateDateOfBirth } from '../../lib/validators';
 
 /* ─── Step indicator ──────────────────────────────────── */
 const STEPS = [
@@ -175,7 +176,14 @@ function PlanCard({ plan, selected, onSelect }) {
 }
 
 /* ─── Step 1: Choose Plan ─────────────────────────────── */
-function StepChoosePlan({ selectedPlan, onSelect, onNext }) {
+/**
+ * Picking a card goes straight to the application form — there is no separate
+ * Continue step. Choosing a plan is already an unambiguous action, so making
+ * someone confirm it was a second tap that told them nothing new, and on a
+ * phone the Continue button sat below the fold under four tall cards.
+ * Changing your mind is still one tap: Back on the form returns here.
+ */
+function StepChoosePlan({ selectedPlan, onSelect }) {
   return (
     <div>
       <div className="text-center mb-10">
@@ -197,21 +205,6 @@ function StepChoosePlan({ selectedPlan, onSelect, onNext }) {
             onSelect={onSelect}
           />
         ))}
-      </div>
-
-      <div className="text-center mt-10">
-        <button
-          type="button"
-          onClick={onNext}
-          disabled={!selectedPlan}
-          className={`font-display font-bold text-sm tracking-wider uppercase px-12 py-4 rounded-full transition-all duration-200 ${
-            selectedPlan
-              ? 'bg-accent text-white hover:bg-accent-dark cursor-pointer hover:shadow-lg hover:shadow-red-900/30'
-              : 'bg-surface-light text-secondary cursor-not-allowed border border-white/5'
-          }`}
-        >
-          Continue
-        </button>
       </div>
     </div>
   );
@@ -287,6 +280,28 @@ function StepApplication({ form, onChange, onPolicyToggle, errors, onSubmit, onB
             placeholder="+254 712 345 678"
             className="w-full bg-surface border border-white/10 rounded-lg px-4 py-3 text-white font-body text-sm placeholder:text-white/20 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors"
           />
+        </div>
+
+        {/* Date of Birth */}
+        <div>
+          <label htmlFor="dateOfBirth" className="block font-display text-xs font-semibold tracking-widest uppercase text-white/80 mb-2">
+            Date of Birth <span className="text-accent">*</span>
+          </label>
+          <input
+            id="dateOfBirth"
+            name="dateOfBirth"
+            type="date"
+            required
+            value={form.dateOfBirth}
+            onChange={onChange}
+            /* Caps the picker at today so a future date can't be chosen at all,
+               rather than being typed and then rejected on submit. */
+            max={new Date().toISOString().split('T')[0]}
+            className="w-full bg-surface border border-white/10 rounded-lg px-4 py-3 text-white font-body text-sm placeholder:text-white/20 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors"
+          />
+          <p className="text-white/30 text-xs font-body mt-2">
+            Used to tailor your programme to your age and stage of development.
+          </p>
         </div>
 
         {/* Sport / Discipline */}
@@ -556,8 +571,15 @@ function JoinFlow() {
   const searchParams = useSearchParams();
   const preselected = searchParams.get('plan');
 
-  const [step, setStep] = useState(1);
-  const [selectedPlan, setSelectedPlan] = useState(preselected || '');
+  // A ?plan= link (from /programs) has already made the choice, so opening on
+  // the plan grid would ask for it a second time. Only honour an id that really
+  // exists — a stale or mistyped link falls back to the grid rather than
+  // carrying an invalid plan into the form, and with no Continue button left on
+  // step 1 that would otherwise be a dead end.
+  const preselectedPlan = preselected && getPlanById(preselected) ? preselected : '';
+
+  const [step, setStep] = useState(preselectedPlan ? 2 : 1);
+  const [selectedPlan, setSelectedPlan] = useState(preselectedPlan);
   const [submitting, setSubmitting] = useState(false);
   const [formErrors, setFormErrors] = useState([]);
 
@@ -565,6 +587,7 @@ function JoinFlow() {
     fullName: '',
     email: '',
     phone: '',
+    dateOfBirth: '',
     sport: '',
     goals: '',
     experience: '',
@@ -576,6 +599,12 @@ function JoinFlow() {
 
   function handleFormChange(e) {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  }
+
+  function handlePlanSelect(planId) {
+    setSelectedPlan(planId);
+    setStep(2);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function handlePolicyToggle() {
@@ -590,6 +619,11 @@ function JoinFlow() {
       errs.push('Please enter a valid email address.');
     if (!form.phone.trim() || form.phone.replace(/[\s\-().]/g, '').length < 7)
       errs.push('Please enter a valid phone number.');
+    // Same rule the API applies, imported rather than restated — a second copy
+    // here would eventually disagree with the server and reject on submit
+    // something the form had just accepted.
+    const dobError = validateDateOfBirth(form.dateOfBirth);
+    if (dobError) errs.push(dobError);
     if (!form.sport.trim())
       errs.push('Please enter your sport or discipline.');
     if (!form.goals.trim())
@@ -653,13 +687,7 @@ function JoinFlow() {
         {step === 1 && (
           <StepChoosePlan
             selectedPlan={selectedPlan}
-            onSelect={setSelectedPlan}
-            onNext={() => {
-              if (selectedPlan) {
-                setStep(2);
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }
-            }}
+            onSelect={handlePlanSelect}
           />
         )}
 

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { trainingPlans, getEffectiveMonthlyRate } from '../../lib/plans';
 import { getPaymentTiming, getOverdueStatus } from '../../lib/billing';
+import { calculateAgeAsOf } from '../../lib/validators';
 import CampView from '../../components/admin/CampView';
 import AuditLogView from '../../components/admin/AuditLogView';
 import FollowUpsView from '../../components/admin/FollowUpsView';
@@ -37,6 +38,20 @@ function formatDate(date) {
 
 function formatKES(amount) {
   return `KES ${Number(amount).toLocaleString('en-KE')}`;
+}
+
+/**
+ * Current age from a stored date of birth, or null when there isn't one.
+ *
+ * Derived on every render rather than stored, so it can't go stale. Returns
+ * null — not 0 — for the clients who applied before the form asked for a DOB,
+ * so callers can say "not on file" instead of showing a newborn.
+ */
+function ageFromDob(dob) {
+  if (!dob) return null;
+  const parsed = new Date(dob);
+  if (isNaN(parsed.getTime())) return null;
+  return calculateAgeAsOf(parsed, new Date());
 }
 
 /**
@@ -405,7 +420,12 @@ function ApplicationCard({ client, adminKey, onUpdate, onClick }) {
           <h3 className={`font-display font-bold text-lg transition-colors ${isInactive ? 'text-white/60 group-hover:text-white/80' : 'text-white group-hover:text-accent'}`}>
             {client.full_name}
           </h3>
-          <p className="text-secondary text-sm font-body">{client.email} &middot; {client.phone}</p>
+          <p className="text-secondary text-sm font-body">
+            {client.email} &middot; {client.phone}
+            {ageFromDob(client.date_of_birth) !== null && (
+              <> &middot; Age {ageFromDob(client.date_of_birth)}</>
+            )}
+          </p>
           {isInactive && (
             <p className="text-yellow-400/70 text-xs font-body mt-1">
               Paused{client.inactive_reason ? ` — ${client.inactive_reason}` : ''}
@@ -1204,6 +1224,19 @@ function ClientDetailView({ client: initialClient, adminKey, onBack, onUpdate })
             <div className="bg-surface-light rounded-lg p-3">
               <span className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">Phone</span>
               <span className="text-white text-sm font-body">{client.phone}</span>
+            </div>
+            <div className="bg-surface-light rounded-lg p-3">
+              <span className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">Age</span>
+              {ageFromDob(client.date_of_birth) !== null ? (
+                <span className="text-white text-sm font-body">
+                  {ageFromDob(client.date_of_birth)} years
+                  <span className="text-white/40"> &middot; born {formatDate(new Date(client.date_of_birth))}</span>
+                </span>
+              ) : (
+                /* Expected for everyone who applied before the form asked, so
+                   this is stated plainly rather than flagged as a problem. */
+                <span className="text-white/40 text-sm font-body">Not on file</span>
+              )}
             </div>
             <div className="bg-surface-light rounded-lg p-3">
               <span className="text-[10px] font-display font-bold tracking-widest uppercase text-white/40 block mb-1">Applied</span>

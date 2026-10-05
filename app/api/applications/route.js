@@ -38,6 +38,10 @@ export async function POST(request) {
       full_name: sanitize(body.fullName),
       email: sanitize(body.email).toLowerCase(),
       phone: sanitize(body.phone),
+      // Already validated above as a real, in-range date. Stored as the raw
+      // YYYY-MM-DD the date input produces — not run through sanitize(), which
+      // is for free text; a DATE column rejects anything malformed outright.
+      date_of_birth: body.dateOfBirth,
       sport: sanitize(body.sport || ''),
       training_goals: sanitize(body.goals || ''),
       availability: sanitize(body.availability || ''),
