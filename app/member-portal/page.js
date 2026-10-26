@@ -25,6 +25,18 @@ export default function MemberPortalPage() {
             <li className="flex items-start gap-3"><span className="text-accent font-bold mt-0.5">&mdash;</span> Communicate with your coaching team</li>
             <li className="flex items-start gap-3"><span className="text-accent font-bold mt-0.5">&mdash;</span> View assessment results and benchmarks</li>
           </ul>
+          <div className="bg-surface border border-white/10 rounded-lg p-5 mb-10 text-left">
+            <p className="font-display text-xs font-bold tracking-widest uppercase text-accent mb-2">Kocha Mwenzangu</p>
+            <p className="text-white text-sm font-body mb-4">
+              Coach Scholars: your weekly files, videos and homework are in the Coach Resource Hub.
+            </p>
+            <Link
+              href="/member-portal/kocha"
+              className="inline-flex items-center min-h-[44px] font-display font-bold text-sm tracking-wider uppercase text-white underline underline-offset-4 hover:text-accent transition-colors"
+            >
+              Open the Coach Resource Hub
+            </Link>
+          </div>
           <Link
             href="/"
             className="inline-block bg-accent text-white px-8 py-3 rounded-full font-display font-bold text-sm tracking-wider uppercase hover:bg-accent-dark transition-all duration-200"
