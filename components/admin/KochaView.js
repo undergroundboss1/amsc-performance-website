@@ -4,64 +4,27 @@ import { useCallback, useEffect, useState } from 'react';
 import { FILE_KIND_LABELS } from '../../lib/kocha/constants';
 import { whatsappLink } from '../../lib/client-comms';
 import { withText } from '../../lib/kocha/share';
+import {
+  INK, INK_2, INK_3, LINE, RED, btn, btnPrimary, card, formatBytes, formatDate, h3, input, label, useAdminApi,
+} from './kocha/styles';
+import LessonsPanel from './kocha/LessonsPanel';
+import InboxPanel from './kocha/InboxPanel';
+import CompletionPanel from './kocha/CompletionPanel';
+import ImportPanel from './kocha/ImportPanel';
 
 /**
  * KochaView — the admin Kocha tab (Kocha Mwenzangu Coach Resource Hub).
  *
- * Phase 1: Coaches (add a coach, send their personal link, revoke or
- * replace it) and Files (upload, replace, publish). Videos, homework,
- * completion and WhatsApp templates follow in later phases.
+ *   Lessons     publish, unlock dates, PDFs, homework, video approval and
+ *               order, readiness, gaps to-do, access settings
+ *   Homework    the inbox: review submissions and leave feedback
+ *   Completion  per coach, per lesson; CSV export
+ *   Import      load the lessons manifest and lesson PDFs
+ *   Coaches     personal links (add, send, replace, turn off)
+ *   Files       every course file (upload, replace, publish)
  *
  * Same inline-style visual language as WaitlistView and CampView.
  */
-
-const INK = '#f5f5f8';
-const INK_2 = '#d3d3d3';
-const INK_3 = '#888';
-const LINE = '#222';
-const SURFACE = '#111';
-const RED = '#a60a08';
-
-const label = { display: 'block', fontSize: '12px', color: INK_2, marginBottom: '4px' };
-const input = {
-  width: '100%', background: '#0a0a0a', border: `1px solid ${LINE}`, borderRadius: '6px',
-  padding: '9px 10px', color: INK, fontSize: '14px', minHeight: '40px', boxSizing: 'border-box',
-};
-const btn = {
-  background: 'transparent', color: INK, border: `1px solid #333`, borderRadius: '6px',
-  padding: '7px 12px', fontSize: '12px', fontWeight: 700, letterSpacing: '0.06em', cursor: 'pointer',
-};
-const btnPrimary = { ...btn, background: RED, border: 'none', color: INK };
-const card = { background: SURFACE, border: `1px solid ${LINE}`, borderRadius: '8px', padding: '14px 16px' };
-const h3 = {
-  fontFamily: 'Oswald, sans-serif', fontSize: '12px', letterSpacing: '0.16em', textTransform: 'uppercase',
-  color: INK_2, margin: '0 0 12px', fontWeight: 600,
-};
-
-function formatDate(iso) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleString('en-KE', {
-    day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Nairobi',
-  });
-}
-
-function formatBytes(bytes) {
-  if (!bytes && bytes !== 0) return '—';
-  return bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
-
-function useAdminApi(adminKey) {
-  return useCallback(async (path, body) => {
-    const res = await fetch(path, {
-      method: body ? 'POST' : 'GET',
-      headers: { Authorization: `Bearer ${adminKey}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || 'Request failed.');
-    return data;
-  }, [adminKey]);
-}
 
 // ─────────────────────────────────────────────────────────────
 // Coaches
@@ -428,14 +391,23 @@ function FilesPanel({ api }) {
 // Tab
 // ─────────────────────────────────────────────────────────────
 
+const PANELS = [
+  ['lessons', 'Lessons'],
+  ['inbox', 'Homework'],
+  ['completion', 'Completion'],
+  ['import', 'Import'],
+  ['coaches', 'Coaches'],
+  ['files', 'Files'],
+];
+
 export default function KochaView({ adminKey }) {
   const api = useAdminApi(adminKey);
-  const [panel, setPanel] = useState('coaches');
+  const [panel, setPanel] = useState('lessons');
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: '6px', marginBottom: '16px' }}>
-        {[['coaches', 'Coaches'], ['files', 'Files']].map(([key, text]) => (
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', flexWrap: 'wrap' }}>
+        {PANELS.map(([key, text]) => (
           <button
             key={key}
             type="button"
@@ -447,7 +419,12 @@ export default function KochaView({ adminKey }) {
           </button>
         ))}
       </div>
-      {panel === 'coaches' ? <CoachesPanel api={api} /> : <FilesPanel api={api} />}
+      {panel === 'lessons' && <LessonsPanel api={api} />}
+      {panel === 'inbox' && <InboxPanel api={api} />}
+      {panel === 'completion' && <CompletionPanel api={api} adminKey={adminKey} />}
+      {panel === 'import' && <ImportPanel api={api} />}
+      {panel === 'coaches' && <CoachesPanel api={api} />}
+      {panel === 'files' && <FilesPanel api={api} />}
     </div>
   );
 }
