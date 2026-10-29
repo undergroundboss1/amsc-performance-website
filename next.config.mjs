@@ -2,6 +2,17 @@ import { withSentryConfig } from '@sentry/nextjs';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  async redirects() {
+    return [
+      // Kocha hub: weeks became lesson pages. Keeps old links shared on
+      // WhatsApp working.
+      {
+        source: '/member-portal/kocha/week/:n',
+        destination: '/member-portal/kocha/lesson/:n',
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {
@@ -39,7 +50,9 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: https: blob:",
               "font-src 'self' data:",
-              "frame-src https://tally.so https://checkout.paystack.com",
+              // *.supabase.co: the Kocha lesson PDF preview (a short-lived signed
+              // link to the private bucket, shown only after the coach taps).
+              "frame-src 'self' https://tally.so https://checkout.paystack.com https://*.supabase.co",
               "connect-src 'self' https://tally.so https://w.behold.so https://*.instagram.com https://*.cdninstagram.com https://*.supabase.co https://api.paystack.co https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com",
               "media-src 'self'",
               "object-src 'none'",

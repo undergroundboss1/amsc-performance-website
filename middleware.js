@@ -23,6 +23,10 @@ const LIMITS = {
   // behind one shared IP, and a Reel can send a burst of real signups.
   '/api/waitlist':           { max: 10, windowMs: 60_000 },
   '/api/waitlist/unsubscribe': { max: 10, windowMs: 60_000 },
+  // Coach homework: a few photos and a voice note per submission is a
+  // burst of 5 or so requests; anything past this is a stuck retry loop.
+  '/api/kocha/homework':            { max: 10, windowMs: 60_000 },
+  '/api/kocha/homework/upload-url': { max: 20, windowMs: 60_000 },
   // Admin-only, but still capped: working through a list of debtors is a
   // legitimate burst, while anything past this is a stuck retry loop.
   '/api/admin/send-payment-email': { max: 20, windowMs: 60_000 },
@@ -99,6 +103,8 @@ export const config = {
     '/api/admin/send-payment-email',
     '/api/waitlist',
     '/api/waitlist/unsubscribe',
+    '/api/kocha/homework',
+    '/api/kocha/homework/upload-url',
     // Note: /monitoring is intentionally excluded — it's the Sentry tunnel route
   ],
 };

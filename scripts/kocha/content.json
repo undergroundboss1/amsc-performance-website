@@ -1,0 +1,920 @@
+{
+  "_about": "Kocha Mwenzangu course content — the single source of truth for scripts/supabase-kocha-seed-v1.sql. Study cards, quick cards and glossary were extracted once from docs/kocha-mwenzangu-source/AMSC_Kocha_Mwenzangu_Coach_Resource_Library.pdf (v1.0, 26 Oct 2026). Regenerate the seed with: python3 scripts/kocha/build_seed.py. The seed only inserts missing rows, so edits Arnold makes in the admin portal are never overwritten.",
+  "cohort": {
+    "slug": "cluster-a",
+    "name": "Kocha Mwenzangu · Cluster A",
+    "starts_on": "2026-10-24"
+  },
+  "release": {
+    "_rule": "Each week opens 7 days before its class at 00:00 EAT. Week 1 is already live. Homework is due the Friday after class at 20:00 EAT.",
+    "open_days_before_class": 7,
+    "due_days_after_class": 6,
+    "due_time": "20:00"
+  },
+  "weeks": [
+    {
+      "n": 1,
+      "title": "Welcome, tools, baseline habit",
+      "takeaway": "We measure to start from the truth.",
+      "competencies": [
+        "C5",
+        "C7"
+      ],
+      "study_card": {
+        "key_ideas": [
+          "A baseline is a starting line, not a grade. Compare each athlete with themselves.",
+          "Results are private: only the athlete and their coach see them.",
+          "Session RPE: ask 'How hard was the whole session?' (0 to 10) about 30 minutes later. Load = RPE x minutes.",
+          "Readiness check: five questions before training. Green go, amber modify, red sit out.",
+          "Pain, dizziness or illness means stop. Nobody is pushed through it."
+        ],
+        "words": [
+          {
+            "term": "Baseline",
+            "meaning": "Your starting numbers, taken before training changes anything."
+          },
+          {
+            "term": "RPE",
+            "meaning": "Rating of perceived exertion: how hard something felt, 0 to 10."
+          },
+          {
+            "term": "Load",
+            "meaning": "RPE multiplied by minutes. A simple measure of how big a session was."
+          },
+          {
+            "term": "Readiness",
+            "meaning": "How ready an athlete is today to train."
+          }
+        ],
+        "watch_note": "A short AMSC video for this session will be added here.",
+        "try_it": [
+          "After your next team session, ask each athlete for their RPE and write it down with the minutes.",
+          "Use the five readiness questions at the start of one session."
+        ],
+        "think_about_it": "Who on your team might rate every session 8 or 9? Who might always say 3? What does that tell you about how to ask the question?"
+      }
+    },
+    {
+      "n": 2,
+      "title": "Reading your baseline",
+      "takeaway": "Compare athletes to themselves.",
+      "competencies": [
+        "C7"
+      ],
+      "study_card": {
+        "key_ideas": [
+          "Each test shows one thing: jumps for power, 20 m sprint for speed, 5-10-5 for changing direction, push-ups and plank for strength endurance, squat snapshot for movement quality.",
+          "Numbers move with sleep, effort, surface and growth. Hand timing has an error of about 0.1 to 0.2 seconds.",
+          "Look at the team for the biggest gap, then at each athlete for one thing to coach.",
+          "Never rank athletes in front of others and never label them."
+        ],
+        "words": [
+          {
+            "term": "Power",
+            "meaning": "How fast you can produce force. A jump is a power test."
+          },
+          {
+            "term": "Acceleration",
+            "meaning": "How quickly you speed up from standing."
+          },
+          {
+            "term": "Change of direction",
+            "meaning": "How well you stop, turn and go again."
+          },
+          {
+            "term": "Snapshot",
+            "meaning": "A quick look at how someone moves, rated G, A or R."
+          }
+        ],
+        "try_it": [
+          "Choose one athlete and write two sentences: what is their strongest area and what will you coach first?",
+          "Run the wall jump test yourself and check you get a similar number twice."
+        ],
+        "think_about_it": "If an athlete is slow in the sprint but jumps well, what might you check first: strength, landing or technique?"
+      }
+    },
+    {
+      "n": 3,
+      "title": "Movement and injury risk",
+      "takeaway": "Move well first; load comes second.",
+      "competencies": [
+        "C3"
+      ],
+      "study_card": {
+        "key_ideas": [
+          "The ankle is the most commonly injured joint in basketball; knee and back injuries are also common.",
+          "Most injuries come from too much too soon, poor landing and movement habits, tiredness and a previous injury.",
+          "Good landing is quiet, soft and balanced for 2 seconds with knees over toes.",
+          "Persistent pain, swelling, locking, numbness or a head knock: stop and refer. Coaches notice, protect and refer; they do not diagnose."
+        ],
+        "words": [
+          {
+            "term": "Landing",
+            "meaning": "How the athlete absorbs force after a jump."
+          },
+          {
+            "term": "Knee valgus",
+            "meaning": "The knee caving inward during a squat or landing."
+          },
+          {
+            "term": "Red flag",
+            "meaning": "A sign that needs a professional."
+          },
+          {
+            "term": "Prevention",
+            "meaning": "Habits that lower injury risk."
+          }
+        ],
+        "try_it": [
+          "Ask two athletes to step off a low box and stick the landing. Write one fix for each.",
+          "Teach one landing cue to your whole team: 'land like a cat'."
+        ],
+        "think_about_it": "Which injury has happened most often on your court, and what habit might have caused it?"
+      }
+    },
+    {
+      "n": 4,
+      "title": "Warm-up, mobility and load",
+      "takeaway": "Prepare the body, then manage the load.",
+      "competencies": [
+        "C1",
+        "C5"
+      ],
+      "study_card": {
+        "key_ideas": [
+          "RAMP: Raise (easy movement), Activate (wake up muscles), Mobilise (take joints through range), Potentiate (short, sharp efforts).",
+          "Dynamic moves before play, static stretches after.",
+          "Weekly load is the sum of session loads. Raise it gradually; a big jump from one week to the next is a warning sign.",
+          "Plan easy days after hard days and an easier week after two or three hard weeks."
+        ],
+        "words": [
+          {
+            "term": "RAMP",
+            "meaning": "Raise, Activate, Mobilise, Potentiate: a four-step warm-up."
+          },
+          {
+            "term": "Dynamic",
+            "meaning": "Moving stretches. Used before training."
+          },
+          {
+            "term": "Weekly load",
+            "meaning": "Total of RPE x minutes for the week."
+          },
+          {
+            "term": "Spike",
+            "meaning": "A sudden big jump in load."
+          }
+        ],
+        "try_it": [
+          "Lead a 15-minute RAMP warm-up with your team and time it.",
+          "Add up the week's loads for three athletes."
+        ],
+        "think_about_it": "In your usual warm-up, which of the four RAMP parts is missing?"
+      }
+    },
+    {
+      "n": 5,
+      "title": "Energy systems",
+      "takeaway": "Train the system the game uses.",
+      "competencies": [
+        "C5"
+      ],
+      "study_card": {
+        "key_ideas": [
+          "Three systems work together: phosphagen (very short, explosive), glycolytic (high effort lasting seconds to about 2 minutes), aerobic (long, steady, helps recovery).",
+          "Basketball is repeated short sprints with brief rests, so conditioning should look like that.",
+          "Aerobic fitness helps athletes recover between bursts.",
+          "Dose conditioning with RPE and minutes. Build gradually and watch heat and hydration."
+        ],
+        "words": [
+          {
+            "term": "Phosphagen",
+            "meaning": "The energy system for the first few seconds of an all-out effort."
+          },
+          {
+            "term": "Glycolytic",
+            "meaning": "Used for hard efforts that last longer, up to a couple of minutes."
+          },
+          {
+            "term": "Aerobic",
+            "meaning": "The steady system that uses oxygen."
+          },
+          {
+            "term": "Work:rest",
+            "meaning": "Time working compared with time resting, e.g. 15 seconds on, 15 off."
+          }
+        ],
+        "try_it": [
+          "Design an 8-minute conditioning block for your team and run it once. Record RPE.",
+          "Replace one jogging lap with a short court-based interval."
+        ],
+        "think_about_it": "In your last game, how long was the longest all-out effort? How long was the rest?"
+      }
+    },
+    {
+      "n": 6,
+      "title": "Strength programming and cues",
+      "takeaway": "Simple patterns, progressed carefully.",
+      "competencies": [
+        "C4"
+      ],
+      "study_card": {
+        "key_ideas": [
+          "Six patterns: squat, hinge, lunge, push, pull, carry (plus core).",
+          "Start with bodyweight; 2 to 3 sets of 6 to 12 reps; stop 1 to 2 reps before failure.",
+          "Under 18: technique first, no maximal lifts.",
+          "One cue at a time, short and positive. Show, cue, correct, check, celebrate.",
+          "Progress only when two sessions look clean."
+        ],
+        "words": [
+          {
+            "term": "Progression",
+            "meaning": "A harder version of an exercise."
+          },
+          {
+            "term": "Regression",
+            "meaning": "An easier version of an exercise."
+          },
+          {
+            "term": "Cue",
+            "meaning": "A short instruction that helps an athlete fix one thing."
+          },
+          {
+            "term": "Hinge",
+            "meaning": "Bending at the hips while keeping the back flat."
+          }
+        ],
+        "try_it": [
+          "Run a 30-minute strength session with one exercise per pattern.",
+          "Practise saying a cue in 6 words or fewer."
+        ],
+        "think_about_it": "Which of your athletes cannot do a clean push-up yet? What easier version could they start with?"
+      }
+    },
+    {
+      "n": 7,
+      "title": "Fueling and hydration",
+      "takeaway": "Food first, water always.",
+      "competencies": [
+        "C6"
+      ],
+      "gate": "nutrition",
+      "study_card": {
+        "key_ideas": [
+          "A simple plate: about half vegetables and fruit, a quarter carbohydrates, a quarter protein.",
+          "Eat the main meal 3 to 4 hours before a game; a small carbohydrate snack about an hour before; nothing new on game day.",
+          "Drink through the day. Pale straw urine is a simple check.",
+          "No supplements or energy drinks for young athletes."
+        ],
+        "words": [
+          {
+            "term": "Carbohydrate",
+            "meaning": "Main fuel for hard efforts: ugali, rice, potatoes, bread."
+          },
+          {
+            "term": "Protein",
+            "meaning": "For building and repairing: eggs, beans, fish, chicken, milk."
+          },
+          {
+            "term": "Hydration",
+            "meaning": "Having enough fluid in the body."
+          }
+        ],
+        "try_it": [
+          "Write what a good day of eating looks like for one athlete using foods they can afford.",
+          "Check water availability at your next practice."
+        ],
+        "think_about_it": "What do your athletes usually eat before a game, and what would you change first?"
+      }
+    },
+    {
+      "n": 8,
+      "title": "Recovery nutrition and sleep",
+      "takeaway": "Recovery is where adaptation happens.",
+      "competencies": [
+        "C6"
+      ],
+      "gate": "nutrition",
+      "study_card": {
+        "key_ideas": [
+          "Within 1 to 2 hours after training, eat a meal or snack with carbohydrate and protein.",
+          "Teenagers need roughly 8 to 10 hours of sleep. Protect it around games and exams.",
+          "You do not need special shakes or powders.",
+          "Skipping meals does not make athletes lighter or faster. Refer medical and eating concerns to a professional."
+        ],
+        "words": [
+          {
+            "term": "Recovery",
+            "meaning": "The time and habits that let the body adapt to training."
+          },
+          {
+            "term": "Sleep routine",
+            "meaning": "Same sleep and wake times, screens off before bed."
+          }
+        ],
+        "try_it": [
+          "Ask your athletes how many hours they slept last night. Look for a pattern.",
+          "Agree one after-training snack your team can afford."
+        ],
+        "think_about_it": "What gets in the way of sleep for your athletes: school, travel, phones, noise?"
+      }
+    },
+    {
+      "n": 9,
+      "title": "Skills Camp preparation",
+      "takeaway": "Lead one station with confidence.",
+      "competencies": [
+        "C1",
+        "C4"
+      ],
+      "joint": true,
+      "summary_focus": "Plan and lead a 10-minute station: aim, drills, cues, safety."
+    },
+    {
+      "n": 10,
+      "title": "Troubleshooting and reinforcement",
+      "takeaway": "Fix what is not working.",
+      "competencies": [
+        "C2",
+        "C4"
+      ],
+      "summary_focus": "Bring your problems; review progress and next steps."
+    },
+    {
+      "n": 11,
+      "title": "Taper and competition readiness",
+      "takeaway": "Arrive fresh, stay fresh.",
+      "competencies": [
+        "C8"
+      ],
+      "joint": true,
+      "summary_focus": "Game-day routine, rest between games, and how to run the re-test."
+    },
+    {
+      "n": 12,
+      "title": "Reflect",
+      "takeaway": "Read the change and plan the next cluster.",
+      "competencies": [
+        "C7",
+        "C8"
+      ],
+      "summary_focus": "Compare baseline and re-test; plan the next 12 weeks."
+    }
+  ],
+  "assignments": [
+    {
+      "week": 1,
+      "title": "Session RPE log",
+      "time_needed": "20 to 30 min, plus a team session",
+      "brief": "Run your next team session as normal. About 30 minutes after it, ask each athlete privately for their RPE (0 to 10). Record the athlete code, RPE and minutes. Multiply RPE by minutes to get the load.",
+      "submit_what": "A photo of the log, the number of athletes, and one sentence on what you noticed.",
+      "done_checklist": [
+        "Every athlete on the log has a code, an RPE and minutes.",
+        "Load is worked out for each athlete (RPE x minutes).",
+        "You wrote one sentence on what you noticed."
+      ],
+      "example": "12 athletes. Most said 5 or 6, but two said 9 after a session I thought was easy. Next time I will ask them one at a time, away from the group."
+    },
+    {
+      "week": 2,
+      "title": "Read one baseline",
+      "time_needed": "20 min",
+      "brief": "Pick one athlete. Write two sentences: their strongest area, and the one thing you will coach first.",
+      "submit_what": "A short text or a voice note.",
+      "done_checklist": [
+        "You named one strongest area, using their own numbers.",
+        "You named one thing to coach first.",
+        "You used an athlete code, not a full name."
+      ],
+      "example": "RRBA-04 has the best broad jump on the team. I will coach landing first, because her knees cave in when she sticks the jump."
+    },
+    {
+      "week": 3,
+      "title": "Landing check",
+      "time_needed": "30 min",
+      "brief": "Watch two athletes land from a small jump. Write one fix for each. Teach one landing cue to the whole team.",
+      "submit_what": "A short text, plus an optional photo or video (only with consent).",
+      "done_checklist": [
+        "One fix written for each of the two athletes.",
+        "One landing cue taught to the whole team.",
+        "Any photo or video only shows athletes whose guardians have consented."
+      ],
+      "example": "RRBA-02: lands loudly, stiff knees. Fix: 'soft knees, hips back'. RRBA-07: knees cave in. Fix: 'knees over toes'. Team cue: 'land like a cat'."
+    },
+    {
+      "week": 4,
+      "title": "Lead a RAMP warm-up",
+      "time_needed": "30 min, plus a session",
+      "brief": "Lead a 15-minute RAMP warm-up with your team and time it. Then log the weekly load for three athletes.",
+      "submit_what": "A photo of the load log and your warm-up time.",
+      "done_checklist": [
+        "All four RAMP parts were in the warm-up.",
+        "You timed it.",
+        "Weekly load is added up for three athletes."
+      ],
+      "example": "Warm-up took 17 minutes; Mobilise ran long. Weekly load: RRBA-01 1,980, RRBA-03 2,250, RRBA-05 1,440."
+    },
+    {
+      "week": 5,
+      "title": "Conditioning block",
+      "time_needed": "30 min, plus a session",
+      "brief": "Design an 8-minute conditioning block: the drill, work time, rest time and RPE target. Run it once and record the RPE.",
+      "submit_what": "A photo of the plan and the RPE results.",
+      "done_checklist": [
+        "The plan shows the drill, work time, rest time and RPE target.",
+        "You ran it once with the team.",
+        "RPE was recorded after the block."
+      ],
+      "example": "Baseline-to-baseline sprints, 15 s on, 30 s off, 8 minutes, target RPE 7. Team average RPE was 8, so next time I will use 45 s rest."
+    },
+    {
+      "week": 6,
+      "title": "Strength session",
+      "time_needed": "45 min, plus a session",
+      "brief": "Run a 30-minute strength session with one exercise per pattern. Log RPE and minutes.",
+      "submit_what": "A photo or short video, and the session log.",
+      "done_checklist": [
+        "One exercise for each pattern: squat, hinge, lunge, push, pull, carry, core.",
+        "Bodyweight or light load, stopping 1 to 2 reps before failure.",
+        "RPE and minutes are logged."
+      ],
+      "example": "Goblet squat (bodyweight), hip hinge to wall, split squat, incline push-up, table row, jerrycan carry, dead bug. 2 sets of 8. 30 minutes, team RPE 5."
+    },
+    {
+      "week": 7,
+      "title": "Nutrition talk",
+      "time_needed": "30 min",
+      "brief": "Give a 5-minute nutrition talk to your team. Collect three questions from athletes.",
+      "submit_what": "A short text with the three questions.",
+      "done_checklist": [
+        "The talk lasted about 5 minutes.",
+        "You wrote down three athlete questions."
+      ],
+      "example": null
+    },
+    {
+      "week": 8,
+      "title": "Recovery habits",
+      "time_needed": "20 min",
+      "brief": "Ask your athletes how many hours they slept last night. Agree one affordable after-training snack with the team.",
+      "submit_what": "A short text with the patterns you noticed.",
+      "done_checklist": [
+        "You asked about sleep and looked for a pattern.",
+        "The team agreed one snack they can afford."
+      ],
+      "example": null
+    },
+    {
+      "week": 9,
+      "title": "Skills Camp station plan",
+      "time_needed": "30 min",
+      "brief": "Write a one-page plan for a 10-minute station: aim, drills, cues, progression, regression and safety.",
+      "submit_what": "A photo of the plan, or type it.",
+      "done_checklist": [
+        "The plan has an aim, drills and cues.",
+        "It has a progression and a regression.",
+        "It has a safety note."
+      ],
+      "example": null
+    },
+    {
+      "week": 10,
+      "title": "Problem for the clinic",
+      "time_needed": "15 min",
+      "optional": true,
+      "brief": "Bring one real problem from your coaching. You can also send a short video of a session.",
+      "submit_what": "A short text or a video link.",
+      "done_checklist": [
+        "You described one real problem in a few sentences."
+      ],
+      "example": null
+    },
+    {
+      "week": 11,
+      "title": "Tournament plan",
+      "time_needed": "30 min",
+      "brief": "Write a tournament-day plan: warm-up, rest and recovery between games. Confirm your role at the re-test.",
+      "submit_what": "A photo of the plan, or type it.",
+      "done_checklist": [
+        "The plan covers warm-up, between games and recovery.",
+        "You confirmed your re-test role."
+      ],
+      "example": null
+    },
+    {
+      "week": 12,
+      "title": "Final reflection",
+      "time_needed": "20 min",
+      "brief": "Write one page or record a voice note: what changed, what you will keep, and your plan for the next 12 weeks.",
+      "submit_what": "Text or a voice note.",
+      "done_checklist": [
+        "What changed.",
+        "What you will keep.",
+        "Your plan for the next 12 weeks."
+      ],
+      "example": null
+    }
+  ],
+  "files": [
+    {
+      "slug": "resource-library",
+      "title": "Coach Resource Library (full pack)",
+      "description": "Study cards for every online class, quick-reference cards to print, the video guide and the glossary.",
+      "kind": "library",
+      "format": "PDF",
+      "size_bytes": 196312,
+      "weeks": [
+        1
+      ],
+      "show_on_home": true,
+      "source_file": "AMSC_Kocha_Mwenzangu_Coach_Resource_Library.pdf",
+      "sort": 10
+    },
+    {
+      "slug": "baseline-data-sheet",
+      "title": "Baseline Data Sheet",
+      "description": "Collect baseline results and session RPE on the day. Enter them into AMSC Metrics later.",
+      "kind": "data_sheet",
+      "format": "XLSX",
+      "size_bytes": 27744,
+      "weeks": [
+        1
+      ],
+      "show_on_home": true,
+      "source_file": "AMSC_Kocha_Mwenzangu_Baseline_Data_Sheet.xlsx",
+      "sort": 20
+    }
+  ],
+  "quick_cards": [
+    {
+      "slug": "session-rpe",
+      "title": "Session RPE",
+      "body": {
+        "columns": [
+          "Rating",
+          "Meaning",
+          "Feels like"
+        ],
+        "rows": [
+          [
+            "0-1",
+            "Rest / very easy",
+            "Walking, stretching"
+          ],
+          [
+            "2-3",
+            "Easy",
+            "Easy jog; you can chat"
+          ],
+          [
+            "4-5",
+            "Moderate",
+            "Short sentences only"
+          ],
+          [
+            "6-7",
+            "Hard",
+            "Heavy breathing; tough but fine"
+          ],
+          [
+            "8-9",
+            "Very hard",
+            "A few words at most"
+          ],
+          [
+            "10",
+            "Maximal",
+            "The hardest you could go"
+          ]
+        ],
+        "note": "Load = RPE x minutes. Example: RPE 6 for 90 minutes = 540. Ask 30 minutes after the session; ask privately."
+      }
+    },
+    {
+      "slug": "readiness-check",
+      "title": "Readiness check",
+      "body": {
+        "columns": [
+          "Ask",
+          "If yes"
+        ],
+        "rows": [
+          [
+            "1. Any pain or injury today?",
+            "RED: sit out of hard work and help in another way."
+          ],
+          [
+            "2. Feeling sick, dizzy or very tired?",
+            "RED: sit out of hard work."
+          ],
+          [
+            "3. Slept under 6 hours?",
+            "AMBER: train, no maximal efforts."
+          ],
+          [
+            "4. Eaten and had water in the last 3 hours?",
+            "If no: AMBER. Give water and a snack first."
+          ],
+          [
+            "5. Anything we should know?",
+            "Listen, then decide."
+          ]
+        ]
+      }
+    },
+    {
+      "slug": "ramp-warm-up",
+      "title": "RAMP warm-up (15 minutes)",
+      "body": {
+        "columns": [
+          "Phase",
+          "Time",
+          "Examples"
+        ],
+        "rows": [
+          [
+            "Raise",
+            "3 min",
+            "Easy jog, side shuffles, skips, arm circles"
+          ],
+          [
+            "Activate",
+            "5 min",
+            "Glute bridges, bodyweight squats, hip circles, ankle rocks, scapular push-ups"
+          ],
+          [
+            "Mobilise",
+            "2 min",
+            "Lunge with reach, lateral lunge, inchworm"
+          ],
+          [
+            "Potentiate",
+            "5 min",
+            "Two small jumps, two build-up sprints over 10 m, one stick-the-landing"
+          ]
+        ]
+      }
+    },
+    {
+      "slug": "landing-cues",
+      "title": "Landing cues",
+      "body": {
+        "items": [
+          "Land quietly. Loud means stiff.",
+          "Soft knees; hips go back.",
+          "Knees stay over the toes, not caving in.",
+          "Balance for 2 seconds before moving.",
+          "Land on two feet before one."
+        ]
+      }
+    },
+    {
+      "slug": "plate-and-hydration",
+      "title": "Plate and hydration",
+      "gate": "nutrition",
+      "body": {
+        "columns": [
+          "Plate",
+          "Examples"
+        ],
+        "rows": [
+          [
+            "Half: vegetables and fruit",
+            "Sukuma wiki, cabbage, spinach, tomatoes, bananas, oranges"
+          ],
+          [
+            "Quarter: carbohydrate",
+            "Ugali, rice, chapati, potatoes, githeri"
+          ],
+          [
+            "Quarter: protein",
+            "Eggs, beans, fish, omena, chicken, milk, lentils"
+          ]
+        ],
+        "note": "Hydration check: pale straw-coloured urine = good. Dark yellow = drink more. No supplements or energy drinks for young athletes."
+      }
+    },
+    {
+      "slug": "stop-rules",
+      "title": "Stop rules",
+      "body": {
+        "items": [
+          "Stop for sharp pain, dizziness, chest pain, trouble breathing or nausea.",
+          "Sit, hydrate, tell a coach.",
+          "Head knock: remove from play and refer. Never the same day.",
+          "Pain lasting more than 2 to 3 days, swelling, locking or numbness: refer."
+        ],
+        "note": "Coaches notice, protect and refer. They do not diagnose."
+      }
+    }
+  ],
+  "glossary": [
+    {
+      "term": "Acceleration",
+      "meaning": "Speeding up from slow or standing.",
+      "first_week": 2
+    },
+    {
+      "term": "Aerobic",
+      "meaning": "Energy system that uses oxygen; steady, long efforts.",
+      "first_week": 5
+    },
+    {
+      "term": "Agility / change of direction",
+      "meaning": "How quickly and smoothly you stop, turn and go.",
+      "first_week": 2
+    },
+    {
+      "term": "Baseline",
+      "meaning": "Your first measurement, used to see change later.",
+      "first_week": 1
+    },
+    {
+      "term": "CMJ",
+      "meaning": "Countermovement jump: dip down, then jump as high as possible.",
+      "first_week": 1
+    },
+    {
+      "term": "Conditioning",
+      "meaning": "Training that builds the ability to repeat efforts.",
+      "first_week": 5
+    },
+    {
+      "term": "Cue",
+      "meaning": "A short instruction that helps an athlete fix one thing.",
+      "first_week": 6
+    },
+    {
+      "term": "Dynamic",
+      "meaning": "Moving stretches. Used before training.",
+      "first_week": 4
+    },
+    {
+      "term": "Glycolytic",
+      "meaning": "Used for hard efforts that last longer, up to a couple of minutes.",
+      "first_week": 5
+    },
+    {
+      "term": "Hinge",
+      "meaning": "Bending at the hips while keeping the back flat.",
+      "first_week": 6
+    },
+    {
+      "term": "Knee valgus",
+      "meaning": "The knee caving inward during a squat or landing.",
+      "first_week": 3
+    },
+    {
+      "term": "Landing",
+      "meaning": "How the athlete absorbs force after a jump.",
+      "first_week": 3
+    },
+    {
+      "term": "Load",
+      "meaning": "How big a session is: RPE x minutes.",
+      "first_week": 1
+    },
+    {
+      "term": "Mobility",
+      "meaning": "Ability to move a joint through its range.",
+      "first_week": 4
+    },
+    {
+      "term": "Phosphagen",
+      "meaning": "The energy system for the first few seconds of an all-out effort.",
+      "first_week": 5
+    },
+    {
+      "term": "Potentiate",
+      "meaning": "Short, sharp efforts at the end of a warm-up to prime the body.",
+      "first_week": 4
+    },
+    {
+      "term": "Power",
+      "meaning": "How fast you can produce force. A jump is a power test.",
+      "first_week": 2
+    },
+    {
+      "term": "Prevention",
+      "meaning": "Habits that lower injury risk.",
+      "first_week": 3
+    },
+    {
+      "term": "Progression",
+      "meaning": "A harder version of an exercise.",
+      "first_week": 6
+    },
+    {
+      "term": "RAMP",
+      "meaning": "Raise, Activate, Mobilise, Potentiate warm-up.",
+      "first_week": 4
+    },
+    {
+      "term": "Readiness",
+      "meaning": "How prepared an athlete is to train today.",
+      "first_week": 1
+    },
+    {
+      "term": "Red flag",
+      "meaning": "A sign that needs a professional.",
+      "first_week": 3
+    },
+    {
+      "term": "Regression",
+      "meaning": "An easier version of an exercise.",
+      "first_week": 6
+    },
+    {
+      "term": "RPE",
+      "meaning": "Rating of perceived exertion (0 to 10).",
+      "first_week": 1
+    },
+    {
+      "term": "Snapshot",
+      "meaning": "A quick look at how someone moves, rated G, A or R.",
+      "first_week": 2
+    },
+    {
+      "term": "Spike",
+      "meaning": "A sudden big jump in load.",
+      "first_week": 4
+    },
+    {
+      "term": "Taper",
+      "meaning": "Reducing training before competition to arrive fresh.",
+      "first_week": 11
+    },
+    {
+      "term": "Volume",
+      "meaning": "The amount of training: sets, reps, minutes.",
+      "first_week": 6
+    },
+    {
+      "term": "Weekly load",
+      "meaning": "Total of RPE x minutes for the week.",
+      "first_week": 4
+    },
+    {
+      "term": "Work:rest",
+      "meaning": "Time working compared with time resting, e.g. 15 seconds on, 15 off.",
+      "first_week": 5
+    },
+    {
+      "term": "Carbohydrate",
+      "meaning": "Main fuel for hard efforts: ugali, rice, potatoes, bread.",
+      "first_week": 7,
+      "gate": "nutrition"
+    },
+    {
+      "term": "Protein",
+      "meaning": "For building and repairing: eggs, beans, fish, chicken, milk.",
+      "first_week": 7,
+      "gate": "nutrition"
+    },
+    {
+      "term": "Hydration",
+      "meaning": "Having enough fluid in the body.",
+      "first_week": 7,
+      "gate": "nutrition"
+    },
+    {
+      "term": "Recovery",
+      "meaning": "The time and habits that let the body adapt to training.",
+      "first_week": 8,
+      "gate": "nutrition"
+    },
+    {
+      "term": "Sleep routine",
+      "meaning": "Same sleep and wake times, screens off before bed.",
+      "first_week": 8,
+      "gate": "nutrition"
+    }
+  ],
+  "message_templates": [
+    {
+      "key": "reminder_24h",
+      "title": "Reminder, 24 hours before class",
+      "body": "Kocha Mwenzangu: Week {week} class is tomorrow, {date} at {time}.\n{title}: {takeaway}\nBefore class, open this week's page, download the files and watch one video: {week_url}"
+    },
+    {
+      "key": "reminder_2h",
+      "title": "Reminder, 2 hours before class",
+      "body": "Week {week} class starts in 2 hours ({time}).\nJoin here: {meet_url}\nThis week's page: {week_url}"
+    },
+    {
+      "key": "post_class",
+      "title": "After class: summary with links",
+      "body": "Thank you for joining Week {week}: {title}.\nToday's sentence: {takeaway}\nRecording and slides are on the week page: {week_url}\nHomework is due {due}."
+    },
+    {
+      "key": "missed_class",
+      "title": "Missed class follow-up",
+      "body": "We missed you at the Week {week} class. The recording and slides are on the week page: {week_url}\nWatch when you can, then do this week's homework (due {due})."
+    },
+    {
+      "key": "onsite_preread",
+      "title": "Pre-read before an onsite visit",
+      "body": "Our next onsite visit is coming up. Please read this week's study card before we arrive: {week_url}\nBring your Baseline Data Sheet."
+    }
+  ]
+}

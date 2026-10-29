@@ -8,6 +8,7 @@ import CampView from '../../components/admin/CampView';
 import AuditLogView from '../../components/admin/AuditLogView';
 import FollowUpsView from '../../components/admin/FollowUpsView';
 import WaitlistView from '../../components/admin/WaitlistView';
+import KochaView from '../../components/admin/KochaView';
 import {
   COMMS_STATUSES,
   COMMS_STATUS_LABELS,
@@ -3982,7 +3983,7 @@ export default function AdminPage() {
               </button>
             </div>
 
-            {/* Top-level tab switcher: Applications | Follow-ups | Revenue | Arrears | Attendance | Camp | Waitlist | Activity */}
+            {/* Top-level tab switcher: Applications | Follow-ups | Revenue | Arrears | Attendance | Camp | Waitlist | Kocha | Activity */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '20px', borderBottom: '1px solid #222', paddingBottom: '0' }}>
               <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                 {[
@@ -3993,6 +3994,7 @@ export default function AdminPage() {
                   ['attendance', 'Attendance'],
                   ['camp', 'Camp'],
                   ['waitlist', 'Waitlist'],
+                  ['kocha', 'Kocha'],
                   ['audit', 'Activity'],
                 ].map(([key, label]) => (
                   <button
@@ -4065,6 +4067,11 @@ export default function AdminPage() {
             {/* Waitlist tab */}
             {activeTab === 'waitlist' && (
               <WaitlistView adminKey={adminKey} />
+            )}
+
+            {/* Kocha Mwenzangu Coach Resource Hub tab */}
+            {activeTab === 'kocha' && (
+              <KochaView adminKey={adminKey} />
             )}
 
             {/* Activity (audit log) tab */}
