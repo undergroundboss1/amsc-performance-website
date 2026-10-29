@@ -83,4 +83,9 @@ BEGIN
 END $$;
 SQL
 
+echo "→ schema v2 (twice) and v2 assertions"
+"${PSQL[@]}" -c "SET client_min_messages = warning" -f "$ROOT/scripts/supabase-kocha-schema-v2.sql" >/dev/null
+"${PSQL[@]}" -c "SET client_min_messages = warning" -f "$ROOT/scripts/supabase-kocha-schema-v2.sql" >/dev/null
+"${PSQL[@]}" -f "$ROOT/tests/kocha/db-assertions-v2.sql"
+
 echo "✓ Kocha database tests passed"
