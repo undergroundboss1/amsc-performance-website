@@ -21,7 +21,7 @@ export default function AccessGate({ reason }) {
   return (
     <div className="bg-background min-h-[80vh] pt-24 pb-20 px-4 sm:px-6">
       <div className="max-w-md mx-auto text-center">
-        <p className="font-display text-xs font-bold tracking-widest uppercase text-accent mb-3">Kocha Mwenzangu</p>
+        <p className="font-display text-xs font-bold tracking-widest uppercase text-red-400 mb-3">Kocha Mwenzangu</p>
         <h1 className="font-display font-black text-3xl tracking-widest mb-4">Coach Resource Hub</h1>
         {MESSAGES[reason] && (
           <p role="status" className="bg-surface border border-white/10 rounded-lg px-4 py-3 text-sm font-body text-white mb-6">

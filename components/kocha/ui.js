@@ -6,9 +6,12 @@ import Link from 'next/link';
  * text-secondary, accent, font-display) so the hub reads as part of the site.
  */
 
+// Small red text uses red-400, not the brand accent: the accent (#DC2626)
+// is 3.9:1 on the near-black background, below WCAG AA for small text.
+// Buttons, bars and borders keep the accent.
 export function Eyebrow({ children }) {
   return (
-    <p className="font-display text-xs font-bold tracking-widest uppercase text-accent mb-2">{children}</p>
+    <p className="font-display text-xs font-bold tracking-widest uppercase text-red-400 mb-2">{children}</p>
   );
 }
 
@@ -99,5 +102,21 @@ export function TickIcon({ done }) {
     </svg>
   ) : (
     <span aria-hidden="true" className="w-5 h-5 rounded-full border-2 border-white/30 flex-shrink-0" />
+  );
+}
+
+const STATUS_CHIP = {
+  not_started: { label: 'Not started', className: 'border border-white/25 text-muted' },
+  in_progress: { label: 'In progress', className: 'border border-yellow-400/60 text-yellow-300' },
+  done: { label: 'Done', className: 'border border-green-400/60 text-green-300' },
+};
+
+/** Lesson status chip: not started, in progress, done. */
+export function StatusChip({ status }) {
+  const chip = STATUS_CHIP[status] || STATUS_CHIP.not_started;
+  return (
+    <span className={`inline-block text-xs font-display font-bold tracking-wider uppercase px-3 py-1 rounded-full ${chip.className}`}>
+      {chip.label}
+    </span>
   );
 }

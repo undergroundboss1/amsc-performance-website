@@ -52,18 +52,38 @@ test('nutrition weeks are "to be confirmed" while the gate is off, with no date 
   assert.equal(opensAt(week7, ctx), null);
 });
 
-test('switching the gate on alone does not open an unpublished nutrition week', () => {
+test('switching the gate on alone does not open an unpublished nutrition lesson', () => {
   const week7 = seededWeeks()[6];
   const ctx = { now: new Date('2027-01-01T12:00:00+03:00'), nutritionEnabled: true };
-  assert.equal(weekState(week7, ctx), 'locked');
+  assert.equal(weekState(week7, ctx), 'soon');
   assert.equal(weekState({ ...week7, published: true }, ctx), 'open');
 });
 
-test('an unpublished week is locked with no date, whatever its release_at', () => {
+test('an unpublished lesson is "coming soon" with no date, whatever its unlock date', () => {
   const week = { ...seededWeeks()[0], published: false };
   const ctx = at('2026-10-26T09:00:00+03:00');
-  assert.equal(weekState(week, ctx), 'locked');
+  assert.equal(weekState(week, ctx), 'soon');
   assert.equal(opensAt(week, ctx), null);
+  assert.equal(weekState(week, { ...ctx, accessMode: 'open' }), 'soon');
+});
+
+test('a lesson with no PDF yet (content_ready = false) is "coming soon" even when published', () => {
+  const week = { ...seededWeeks()[9], content_ready: false };
+  assert.equal(weekState(week, { ...at('2027-03-01T12:00:00+03:00'), accessMode: 'open' }), 'soon');
+});
+
+test('"open" access mode opens any published lesson before its unlock date; "by_week" waits', () => {
+  const week6 = seededWeeks()[5]; // unlocks Sat 21 Nov
+  const early = at('2026-10-26T09:00:00+03:00');
+  assert.equal(weekState(week6, { ...early, accessMode: 'by_week' }), 'locked');
+  assert.equal(opensAt(week6, { ...early, accessMode: 'by_week' }), week6.release_at);
+  assert.equal(weekState(week6, { ...early, accessMode: 'open' }), 'open');
+  assert.equal(opensAt(week6, { ...early, accessMode: 'open' }), null);
+});
+
+test('"open" mode never opens held nutrition lessons', () => {
+  const week7 = { ...seededWeeks()[6], published: true };
+  assert.equal(weekState(week7, { ...at('2026-10-26T09:00:00+03:00'), accessMode: 'open' }), 'tbc');
 });
 
 test('unknown gates stay closed', () => {

@@ -10,7 +10,7 @@ import { KOCHA_BASE } from '../../lib/kocha/constants';
  * wrapping.
  */
 const LINKS = [
-  { href: KOCHA_BASE, label: 'Course home', exact: true },
+  { href: KOCHA_BASE, label: 'Dashboard', exact: true },
   { href: `${KOCHA_BASE}/downloads`, label: 'Downloads' },
   { href: `${KOCHA_BASE}/quick-cards`, label: 'Quick cards' },
   { href: `${KOCHA_BASE}/glossary`, label: 'Glossary' },

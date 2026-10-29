@@ -1,30 +1,36 @@
 import { getKochaSupabase } from '../../../lib/supabase';
 import { getCurrentScholar } from '../../../lib/kocha/session';
-import { loadCourse, filesForWeek } from '../../../lib/kocha/data';
+import { lessonProgress, loadCourse } from '../../../lib/kocha/data';
 import { isGateOpen } from '../../../lib/kocha/release';
 import { gateReason } from '../../../lib/kocha/gate-reason';
-import { KOCHA_BASE, METRICS_URL, WEEK_STEPS } from '../../../lib/kocha/constants';
-import { firstName, formatDay } from '../../../lib/kocha/format';
+import { KOCHA_BASE, METRICS_URL } from '../../../lib/kocha/constants';
+import { firstName } from '../../../lib/kocha/format';
 import { whatsappLink } from '../../../lib/client-comms';
 import { business } from '../../../lib/business';
 import { withText } from '../../../lib/kocha/share';
 import AccessGate from '../../../components/kocha/AccessGate';
 import KochaShell from '../../../components/kocha/KochaShell';
-import WeekMap from '../../../components/kocha/WeekMap';
+import LessonTile from '../../../components/kocha/LessonTile';
 import FileList from '../../../components/kocha/FileList';
 import QuickCard from '../../../components/kocha/QuickCard';
-import { ButtonLink, Card, Eyebrow, Section, TickIcon } from '../../../components/kocha/ui';
+import { ButtonLink, Card, Section } from '../../../components/kocha/ui';
 
 /**
- * /member-portal/kocha — Course home.
+ * /member-portal/kocha — the coach's dashboard.
  *
- * "This week" first (what to download, watch and submit, one tap to the
- * week page), then the 12-week map, this week's files, quick links, the
- * standing Metrics task and the stop rules.
+ * Twelve lesson tiles first (tap one to open everything for that week),
+ * then the optional full pack and other course files, quick links, the
+ * standing AMSC Metrics task and the stop rules.
  */
 export const dynamic = 'force-dynamic';
 
-export default async function KochaHomePage({ searchParams }) {
+function addDays(isoDate, days) {
+  const d = new Date(`${isoDate}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+export default async function KochaDashboardPage({ searchParams }) {
   const scholar = await getCurrentScholar();
   if (!scholar) return <AccessGate reason={gateReason(searchParams)} />;
 
@@ -43,12 +49,8 @@ export default async function KochaHomePage({ searchParams }) {
       }),
   ]);
 
-  const week = course.weeks.find((w) => w.n === course.currentN);
-  const isOpen = week?.state === 'open';
-  const doneSteps = course.progress[course.currentN] || [];
-  const weekFiles = isOpen ? filesForWeek(course, week.n) : [];
-  const homeFiles = course.files.filter((f) => f.show_on_home && !weekFiles.includes(f));
-  const baseline = course.files.find((f) => f.kind === 'data_sheet');
+  // Course-wide files (the optional full pack, the baseline sheet).
+  const homeFiles = course.files.filter((f) => f.show_on_home);
   const help = withText(
     whatsappLink(business.telephone),
     `Hi AMSC, this is ${scholar.display_name} from Kocha Mwenzangu. I need help with: `
@@ -57,62 +59,37 @@ export default async function KochaHomePage({ searchParams }) {
   const quickLinks = [
     { href: `${KOCHA_BASE}/quick-cards`, label: 'Quick-reference cards' },
     { href: `${KOCHA_BASE}/glossary`, label: 'Glossary' },
-    baseline && { href: `/api/kocha/files/${baseline.id}`, label: 'Baseline Data Sheet', download: true },
     scholar.cohort.whatsapp_group_url && { href: scholar.cohort.whatsapp_group_url, label: 'AMSC WhatsApp group', external: true },
     help && { href: help, label: 'Ask AMSC for help', external: true },
   ].filter(Boolean);
 
   return (
     <KochaShell scholar={scholar}>
-      <h1 className="font-display font-black text-3xl md:text-4xl tracking-widest mb-8">
+      <h1 className="font-display font-black text-3xl md:text-4xl tracking-widest mb-2">
         Welcome, {firstName(scholar.display_name)}
       </h1>
+      <p className="font-body text-secondary mb-8">Tap a lesson to see its study card, videos and homework.</p>
 
-      {week && (
-        <Card className="mb-8 border-accent/60">
-          <Eyebrow>
-            This week · Week {week.n} · {formatDay(week.class_on)}
-          </Eyebrow>
-          {isOpen ? (
-            <>
-              <h2 className="font-display text-2xl tracking-wider text-white">{week.title}</h2>
-              {week.takeaway && <p className="font-body text-white mt-2">{week.takeaway}</p>}
-              <ul className="mt-5 space-y-2" aria-label="This week's steps">
-                {WEEK_STEPS.map((s, i) => {
-                  const done = doneSteps.includes(s.key);
-                  return (
-                    <li key={s.key} className="flex items-center gap-3 font-body text-sm">
-                      <TickIcon done={done} />
-                      <span className="text-white">
-                        Step {i + 1}: {s.label}
-                        <span className="sr-only">{done ? ' (done)' : ' (not done yet)'}</span>
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-              <div className="mt-6">
-                <ButtonLink href={`${KOCHA_BASE}/week/${week.n}`}>Open Week {week.n}</ButtonLink>
-              </div>
-            </>
-          ) : (
-            <p className="font-body text-secondary">The course opens soon. Check back here.</p>
-          )}
-        </Card>
-      )}
-
-      <Section id="map" title="12-week map" className="mb-10">
-        <WeekMap weeks={course.weeks} currentN={course.currentN} progress={course.progress} />
+      <Section id="lessons" title="Your lessons" className="mb-12">
+        <ol className="grid grid-cols-1 min-[400px]:grid-cols-2 md:grid-cols-3 gap-3">
+          {course.weeks.map((w) => (
+            <LessonTile
+              key={w.n}
+              week={w}
+              progress={lessonProgress(course, w.n)}
+              isCurrent={w.n === course.currentN}
+              // An onsite visit for this coach's zone during this lesson's week.
+              visit={course.visits.find((v) => v.visit_on >= w.class_on && v.visit_on <= addDays(w.class_on, 6))}
+            />
+          ))}
+        </ol>
       </Section>
-
-      {isOpen && (
-        <Section id="this-week-files" title={`Download for Week ${week.n}`} className="mb-10">
-          <FileList files={weekFiles} weekN={week.n} />
-        </Section>
-      )}
 
       {homeFiles.length > 0 && (
         <Section id="course-files" title="Course files" className="mb-10">
+          <p className="font-body text-sm text-secondary mb-4">
+            Optional. Each lesson already has its own study card; the full pack has them all in one file.
+          </p>
           <FileList files={homeFiles} />
         </Section>
       )}
@@ -127,7 +104,7 @@ export default async function KochaHomePage({ searchParams }) {
                 className="flex items-center justify-between min-h-[52px] bg-surface border border-white/10 rounded-lg px-4 font-body text-white hover:border-white/30 transition-colors"
               >
                 {l.label}
-                <span aria-hidden="true" className="text-accent">{l.download ? '↓' : '→'}</span>
+                <span aria-hidden="true" className="text-red-400">→</span>
               </a>
             </li>
           ))}

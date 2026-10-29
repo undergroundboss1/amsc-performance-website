@@ -35,13 +35,17 @@ export async function POST(request) {
     const db = getKochaSupabase();
     const { data: week, error: weekError } = await db
       .from('weeks')
-      .select('id, published, release_at, gate')
+      .select('id, published, release_at, gate, content_ready')
       .eq('cohort_id', scholar.cohort.id)
       .eq('n', weekN)
       .maybeSingle();
     if (weekError) throw weekError;
 
-    const ctx = { now: new Date(), nutritionEnabled: scholar.cohort.nutrition_enabled };
+    const ctx = {
+      now: new Date(),
+      nutritionEnabled: scholar.cohort.nutrition_enabled,
+      accessMode: scholar.cohort.lesson_access_mode,
+    };
     if (!week || weekState(week, ctx) !== 'open') {
       return NextResponse.json({ error: 'This week is not open yet.' }, { status: 403 });
     }

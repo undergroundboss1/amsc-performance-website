@@ -35,7 +35,7 @@ export function FileCard({ file: f, weekN }) {
     .filter(Boolean)
     .join(' · ');
   const href = `/api/kocha/files/${f.id}${weekN ? `?week=${weekN}` : ''}`;
-  const pageUrl = `${SITE_URL}${weekN ? `${KOCHA_BASE}/week/${weekN}` : `${KOCHA_BASE}/downloads`}`;
+  const pageUrl = `${SITE_URL}${weekN ? `${KOCHA_BASE}/lesson/${weekN}` : `${KOCHA_BASE}/downloads`}`;
   return (
     <div className="bg-surface border border-white/10 rounded-lg p-4">
       <h3 className="font-body font-semibold text-white normal-case tracking-normal text-base">{f.title}</h3>

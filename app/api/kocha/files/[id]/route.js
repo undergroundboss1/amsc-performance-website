@@ -19,8 +19,9 @@ import { KOCHA_BASE } from '../../../../../lib/kocha/constants';
  * whatever their id. Someone without a session who follows a shared link
  * is sent to the course home, which explains how to get access.
  *
- * ?week=n ticks "Download" on that week's checklist when the file belongs
- * to that week.
+ * ?week=n ticks "Study card opened" on that lesson when the file belongs
+ * to it. ?inline=1 opens the file for the in-page preview instead of
+ * downloading it.
  */
 export const dynamic = 'force-dynamic';
 
@@ -42,12 +43,16 @@ export async function GET(request, { params }) {
       db.from('files')
         .select('id, title, audience, source, storage_path, external_url, weeks, show_on_home, gate, published')
         .eq('id', params.id).eq('cohort_id', cohortId).maybeSingle(),
-      db.from('weeks').select('id, n, published, release_at, gate').eq('cohort_id', cohortId),
+      db.from('weeks').select('id, n, published, release_at, gate, content_ready').eq('cohort_id', cohortId),
     ]);
     if (fileError) throw fileError;
     if (weeksError) throw weeksError;
 
-    const ctx = { now: new Date(), nutritionEnabled: scholar.cohort.nutrition_enabled };
+    const ctx = {
+      now: new Date(),
+      nutritionEnabled: scholar.cohort.nutrition_enabled,
+      accessMode: scholar.cohort.lesson_access_mode,
+    };
     const openWeekNs = openWeekNumbers(weeks, ctx);
     if (!fileDownloadable(file, { openWeekNs, nutritionEnabled: ctx.nutritionEnabled })) return notFound();
 
@@ -71,10 +76,13 @@ export async function GET(request, { params }) {
 
     // Stored as files/<slug>/v<version>-<original name>; download under the
     // original name.
+    // ?inline=1 is the in-page PDF preview: the browser shows the file
+    // instead of saving it. Otherwise it downloads under its original name.
+    const inline = new URL(request.url).searchParams.get('inline') === '1';
     const downloadName = file.storage_path.split('/').pop().replace(/^v\d+-/, '');
     const { data: signed, error: signError } = await db.storage
       .from('kocha')
-      .createSignedUrl(file.storage_path, 60, { download: downloadName });
+      .createSignedUrl(file.storage_path, inline ? 300 : 60, inline ? {} : { download: downloadName });
     if (signError || !signed?.signedUrl) {
       console.error('kocha signed URL error:', signError);
       return NextResponse.json({ error: 'This file is not available right now. Please try again later.' }, { status: 503 });
