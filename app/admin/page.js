@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { trainingPlans, getEffectiveMonthlyRate } from '../../lib/plans';
 import { getPaymentTiming, getOverdueStatus } from '../../lib/billing';
 import { calculateAgeAsOf } from '../../lib/validators';
@@ -3390,6 +3390,9 @@ function RevenueView({ adminKey }) {
   const [filter, setFilter] = useState('');
   const [period, setPeriod] = useState('month'); // 'week' | 'month' | 'year' | 'all'
   const [showImport, setShowImport] = useState(false);
+  // Which week/month/year is on screen. Only ever used to derive the period's
+  // boundaries — never to ask "is this now", which is always a real clock check.
+  const [cursor, setCursor] = useState(() => new Date());
 
   function exportLedgerCSV() {
     const rows = [
@@ -3411,7 +3414,14 @@ function RevenueView({ adminKey }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `AMSC_payments_${period}_${new Date().toISOString().split('T')[0]}.csv`;
+    // Name the file after what is actually in it, so a folder of exports
+    // doesn't become four files all called AMSC_payments_month.
+    const scope = searching
+      ? `search_${filter.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 24)}`
+      : period === 'all'
+      ? 'all-time'
+      : cursorLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    a.download = `AMSC_payments_${scope}_${new Date().toISOString().split('T')[0]}.csv`;
     document.body.appendChild(a); a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
@@ -3442,18 +3452,51 @@ function RevenueView({ adminKey }) {
     const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Mon as start
     const s = new Date(d); s.setDate(diff); s.setHours(0,0,0,0); return s;
   }
-  const weekStart = getWeekStart(now);
+
+  // Boundaries of the period being viewed, which is the cursor's period —
+  // this month by default, some earlier one once you step back.
+  const weekStart = getWeekStart(cursor);
   const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 7);
 
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const monthStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+  const monthEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
 
-  const yearStart = new Date(now.getFullYear(), 0, 1);
-  const yearEnd = new Date(now.getFullYear() + 1, 0, 1);
+  const yearStart = new Date(cursor.getFullYear(), 0, 1);
+  const yearEnd = new Date(cursor.getFullYear() + 1, 0, 1);
 
   function inRange(p, start, end) {
     const d = new Date(p.payment_date);
     return d >= start && d < end;
+  }
+
+  // Is a given date inside the period we are actually living in? Drives the NOW
+  // marker, and stops you paging forward into months that cannot have data.
+  function isPresentPeriod(d) {
+    const t = new Date();
+    if (period === 'week') return getWeekStart(d).getTime() === getWeekStart(t).getTime();
+    if (period === 'month') return d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth();
+    if (period === 'year') return d.getFullYear() === t.getFullYear();
+    return true; // 'all'
+  }
+  const atPresent = isPresentPeriod(cursor);
+
+  // Rebuilt from parts rather than mutated: setMonth() on the 31st rolls over
+  // into the month after next, which would skip a month on every other step.
+  // Year steps keep the month so a step back and forward is lossless.
+  function shiftPeriod(direction) {
+    setCursor(c => {
+      let next;
+      if (period === 'month') next = new Date(c.getFullYear(), c.getMonth() + direction, 1);
+      else if (period === 'year') next = new Date(c.getFullYear() + direction, c.getMonth(), 1);
+      else {
+        next = new Date(c);
+        next.setDate(next.getDate() + direction * 7);
+      }
+      // Stepping back onto the present period means "now", not the 1st of it —
+      // the period tabs share one cursor, so a cursor parked on 1 January would
+      // otherwise send the Month and Week tabs somewhere stale.
+      return isPresentPeriod(next) ? new Date() : next;
+    });
   }
 
   // ── Filter payments for current period ────────────────────────────────────
@@ -3510,13 +3553,15 @@ function RevenueView({ adminKey }) {
       return weeks;
     }
     if (period === 'year') {
-      // Jan–Dec of current year
+      // Jan–Dec of the year being viewed
       const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
       return monthNames.map((name, m) => {
-        const mStart = new Date(now.getFullYear(), m, 1);
-        const mEnd = new Date(now.getFullYear(), m + 1, 1);
+        const mStart = new Date(cursor.getFullYear(), m, 1);
+        const mEnd = new Date(cursor.getFullYear(), m + 1, 1);
         const rows = payments.filter(p => inRange(p, mStart, mEnd));
-        const isCurrent = m === now.getMonth();
+        // Only the real current month, and only while viewing the real current
+        // year — otherwise every past year would mark the same month NOW.
+        const isCurrent = m === now.getMonth() && cursor.getFullYear() === now.getFullYear();
         return { label: name, ...sumPayments(rows), count: rows.length, current: isCurrent };
       });
     }
@@ -3536,15 +3581,71 @@ function RevenueView({ adminKey }) {
   }
   const breakdown = buildBreakdown();
 
-  // ── Filtered ledger ────────────────────────────────────────────────────────
-  const filtered = periodPayments.filter(p =>
-    !filter ||
-    (p.clients?.full_name || '').toLowerCase().includes(filter.toLowerCase()) ||
-    (p.payment_method || '').toLowerCase().includes(filter.toLowerCase())
+  // ── Ledger rows ────────────────────────────────────────────────────────────
+  // Searching deliberately ignores the period and looks at every payment on
+  // record. Finding one old receipt shouldn't mean guessing which month it
+  // was in first — that is the whole reason to search rather than browse.
+  const query = filter.trim().toLowerCase();
+  const searching = query.length > 0;
+
+  // Built once per ledger load, not once per keystroke — formatting a date for
+  // every payment on every character typed is what makes a search box lag.
+  const searchIndex = useMemo(
+    () =>
+      payments.map(p =>
+        [
+          p.clients?.full_name,
+          p.clients?.email,
+          paymentMethodLabel(p.payment_method),
+          p.plan_id,
+          p.notes,
+          p.source,
+          String(p.amount),
+          formatDate(new Date(p.payment_date)),
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+      ),
+    [payments]
   );
 
+  const filtered = searching
+    ? payments.filter((_, i) => searchIndex[i].includes(query))
+    : periodPayments;
+  const searchTotals = sumPayments(filtered);
+
   // ── Period label for header ────────────────────────────────────────────────
-  const periodLabel = { week: 'This Week', month: 'This Month', year: 'This Year', all: 'All Time' }[period];
+  const periodLabel =
+    period === 'all'
+      ? 'All Time'
+      : atPresent
+      ? { week: 'This Week', month: 'This Month', year: 'This Year' }[period]
+      : {
+          week: `Week of ${formatDate(weekStart)}`,
+          month: cursor.toLocaleDateString('en-KE', { month: 'long', year: 'numeric' }),
+          year: String(cursor.getFullYear()),
+        }[period];
+
+  // The navigator always names the exact period, even when it is the current
+  // one — "This Month" alone never tells you which month you are looking at.
+  const cursorLabel =
+    period === 'all'
+      ? 'Every record'
+      : {
+          week: `${formatDate(weekStart)} — ${formatDate(new Date(weekEnd.getTime() - 86400000))}`,
+          month: cursor.toLocaleDateString('en-KE', { month: 'long', year: 'numeric' }),
+          year: String(cursor.getFullYear()),
+        }[period];
+
+  // Reads inside a sentence, so the present periods stay lowercase while a
+  // named one keeps its capital: "still cover this month" / "…cover October 2026".
+  const scopeLabel =
+    period === 'all'
+      ? 'every record'
+      : atPresent
+      ? { week: 'this week', month: 'this month', year: 'this year' }[period]
+      : cursorLabel;
 
   const tabStyle = (active) => ({
     background: 'transparent', border: 'none',
@@ -3568,7 +3669,7 @@ function RevenueView({ adminKey }) {
       )}
 
       {/* Header row: period tabs + Import button */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: '1px solid #222', marginBottom: '20px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: '1px solid #222', marginBottom: '20px', flexWrap: 'wrap', gap: '8px' }}>
         <div style={{ display: 'flex', gap: '2px' }}>
           {[['week','Week'],['month','Month'],['year','Year'],['all','All Time']].map(([key, label]) => (
             <button key={key} onClick={() => setPeriod(key)} style={tabStyle(period === key)}>{label}</button>
@@ -3591,16 +3692,60 @@ function RevenueView({ adminKey }) {
         </div>
       </div>
 
+      {/* Period navigator — step back through weeks, months or years */}
+      {period !== 'all' && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => shiftPeriod(-1)}
+            aria-label={`Previous ${period}`}
+            style={{ background: '#1a1a1a', border: '1px solid #333', color: '#f5f5f8', borderRadius: '6px', padding: '6px 13px', fontSize: '14px', cursor: 'pointer', lineHeight: 1 }}
+          >
+            ←
+          </button>
+          <span style={{
+            fontFamily: 'Oswald, sans-serif', fontWeight: 700, fontSize: '14px',
+            letterSpacing: '0.06em', textTransform: 'uppercase', color: '#f5f5f8',
+            minWidth: '190px', textAlign: 'center',
+          }}>
+            {cursorLabel}
+          </span>
+          <button
+            onClick={() => shiftPeriod(1)}
+            disabled={atPresent}
+            aria-label={`Next ${period}`}
+            style={{
+              background: '#1a1a1a', border: '1px solid #333', color: '#f5f5f8', borderRadius: '6px',
+              padding: '6px 13px', fontSize: '14px', lineHeight: 1,
+              cursor: atPresent ? 'not-allowed' : 'pointer', opacity: atPresent ? 0.3 : 1,
+            }}
+          >
+            →
+          </button>
+          {!atPresent && (
+            <button
+              onClick={() => setCursor(new Date())}
+              style={{ background: 'transparent', border: '1px solid #a60a08', color: '#a60a08', borderRadius: '6px', padding: '6px 14px', fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer', fontFamily: 'Oswald, sans-serif' }}
+            >
+              Back to now
+            </button>
+          )}
+        </div>
+      )}
+
       {/* KPI strip */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '20px' }}>
         {[
-          { label: `${periodLabel} — Revenue`, value: formatKES(periodTotals.revenue), sub: `${periodPayments.length} payment${periodPayments.length !== 1 ? 's' : ''}` },
-          { label: `${periodLabel} — Rent`, value: formatKES(periodTotals.rent), sub: 'Facility split (40%)' },
-          { label: `${periodLabel} — Net`, value: formatKES(periodTotals.net), sub: 'After rent split', green: true },
-          { label: 'All Time — Net', value: formatKES(sumPayments(payments).net), sub: `${payments.length} total payments`, dim: true },
+          // Keyed by id, not label: on the All Time tab the third tile's label
+          // is literally "All Time — Net", same as the fourth.
+          { id: 'revenue', label: `${periodLabel} — Revenue`, value: formatKES(periodTotals.revenue), sub: `${periodPayments.length} payment${periodPayments.length !== 1 ? 's' : ''}` },
+          { id: 'rent', label: `${periodLabel} — Rent`, value: formatKES(periodTotals.rent), sub: 'Facility split (40%)' },
+          { id: 'net', label: `${periodLabel} — Net`, value: formatKES(periodTotals.net), sub: 'After rent split', green: true },
+          { id: 'all-net', label: 'All Time — Net', value: formatKES(sumPayments(payments).net), sub: `${payments.length} total payments`, dim: true },
         ].map(k => (
-          <div key={k.label} style={{ background: k.dim ? '#111' : '#1a1a1a', border: '1px solid #222', borderRadius: '8px', padding: '14px' }}>
-            <p style={{ fontFamily: 'Oswald, sans-serif', fontWeight: 700, fontSize: '10px', letterSpacing: '0.1em', color: '#555', textTransform: 'uppercase', margin: '0 0 5px 0' }}>{k.label}</p>
+          <div key={k.id} style={{ background: k.dim ? '#111' : '#1a1a1a', border: '1px solid #222', borderRadius: '8px', padding: '14px' }}>
+            {/* minHeight keeps the four values on one baseline when a longer
+                period name ("October 2026 — Revenue") wraps and a short one doesn't. */}
+            <p style={{ fontFamily: 'Oswald, sans-serif', fontWeight: 700, fontSize: '10px', letterSpacing: '0.1em', color: '#555', textTransform: 'uppercase', margin: '0 0 5px 0', minHeight: '26px' }}>{k.label}</p>
             <p style={{ fontSize: k.dim ? '16px' : '20px', fontWeight: 700, color: k.green ? '#22c55e' : '#f5f5f8', margin: '0 0 2px 0' }}>{k.value}</p>
             <p style={{ fontSize: '11px', color: '#555', margin: 0 }}>{k.sub}</p>
           </div>
@@ -3647,24 +3792,57 @@ function RevenueView({ adminKey }) {
       )}
 
       {/* Ledger section header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-        <p style={{ fontFamily: 'Oswald, sans-serif', fontWeight: 700, fontSize: '12px', letterSpacing: '0.1em', color: '#555', textTransform: 'uppercase', margin: 0 }}>
-          {periodLabel} Transactions
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', gap: '10px', flexWrap: 'wrap' }}>
+        <p style={{ fontFamily: 'Oswald, sans-serif', fontWeight: 700, fontSize: '12px', letterSpacing: '0.1em', color: searching ? '#a60a08' : '#555', textTransform: 'uppercase', margin: 0 }}>
+          {searching ? 'Search results · all records' : `${periodLabel} Transactions`}
         </p>
-        <input
-          type="text"
-          placeholder="Filter by client or method…"
-          value={filter}
-          onChange={e => setFilter(e.target.value)}
-          style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: '6px', padding: '6px 12px', color: '#f5f5f8', fontSize: '13px', width: '220px' }}
-        />
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <input
+            type="text"
+            id="revenue-search"
+            placeholder="Search all records — client, amount, note…"
+            value={filter}
+            onChange={e => setFilter(e.target.value)}
+            style={{ background: '#1a1a1a', border: `1px solid ${searching ? '#a60a08' : '#333'}`, borderRadius: '6px', padding: '6px 12px', color: '#f5f5f8', fontSize: '13px', width: '260px', maxWidth: '100%' }}
+          />
+          {searching && (
+            <button
+              onClick={() => setFilter('')}
+              style={{ background: 'transparent', border: '1px solid #333', color: '#555', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', cursor: 'pointer' }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* What a search actually found — across every period, not just this one */}
+      {searching && (
+        <div style={{ background: '#1a1a1a', border: '1px solid #222', borderLeft: '2px solid #a60a08', borderRadius: '6px', padding: '10px 14px', marginBottom: '12px' }}>
+          <p style={{ margin: 0, fontSize: '13px', color: '#d3d3d3' }}>
+            <strong style={{ color: '#f5f5f8' }}>{filtered.length}</strong> payment{filtered.length !== 1 ? 's' : ''} matching “{filter.trim()}”
+            {filtered.length > 0 && (
+              <>
+                {' · '}<strong style={{ color: '#f5f5f8' }}>{formatKES(searchTotals.revenue)}</strong> total
+                {' · '}<strong style={{ color: '#22c55e' }}>{formatKES(searchTotals.net)}</strong> net
+              </>
+            )}
+          </p>
+          <p style={{ margin: '3px 0 0 0', fontSize: '11px', color: '#555' }}>
+            Searching every record — the figures above this ledger still cover {scopeLabel}.
+          </p>
+        </div>
+      )}
 
       {/* Transaction ledger */}
       {loading ? (
         <p style={{ color: '#555', fontSize: '13px' }}>Loading transactions…</p>
       ) : filtered.length === 0 ? (
-        <p style={{ color: '#555', fontSize: '13px', fontStyle: 'italic' }}>No transactions for this period.</p>
+        <p style={{ color: '#555', fontSize: '13px', fontStyle: 'italic' }}>
+          {searching
+            ? `Nothing on record matches “${filter.trim()}”.`
+            : 'No transactions for this period.'}
+        </p>
       ) : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
