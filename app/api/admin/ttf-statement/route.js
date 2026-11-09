@@ -63,20 +63,27 @@ export async function GET(request) {
 
     const supabase = getSupabase();
 
-    // The roster for the "add a client" picker. Online clients are left out
-    // for the same reason they never appear in a draft: they use no facility
-    // and owe no rent, so offering them would only invite a mistake.
+    // The roster for the "add a client" picker: people actually training at
+    // the facility right now. Same definition of active the Applications tab
+    // uses — approved, has paid at least once, not on a training pause — plus
+    // online clients excluded, since they use no facility and owe no rent.
+    //
+    // A declined applicant or a paused client appearing here would only be a
+    // chance to bill the landlord for someone who was never on the floor.
+    // Anyone genuinely missing is still one click away on "+ Blank line".
     const { data: clientRows } = await supabase
       .from('clients')
-      .select('full_name, selected_plan')
+      .select('full_name')
+      .eq('application_status', 'approved')
+      .neq('selected_plan', 'online')
+      .not('last_paid_at', 'is', null)
+      // training_status predates some rows and is null for them; null means
+      // active, and a bare neq would drop those rows instead of keeping them.
+      .or('training_status.is.null,training_status.neq.inactive')
       .order('full_name', { ascending: true });
 
     const clientNames = [
-      ...new Set(
-        (clientRows || [])
-          .filter(c => c.selected_plan !== 'online' && c.full_name)
-          .map(c => c.full_name.trim())
-      ),
+      ...new Set((clientRows || []).filter(c => c.full_name).map(c => c.full_name.trim())),
     ];
 
     const { data: existing, error: readError } = await supabase
