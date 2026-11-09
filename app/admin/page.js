@@ -8,6 +8,7 @@ import CampView from '../../components/admin/CampView';
 import AuditLogView from '../../components/admin/AuditLogView';
 import FollowUpsView from '../../components/admin/FollowUpsView';
 import WaitlistView from '../../components/admin/WaitlistView';
+import RentView from '../../components/admin/RentView';
 import KochaView from '../../components/admin/KochaView';
 import {
   COMMS_STATUSES,
@@ -4169,6 +4170,7 @@ export default function AdminPage() {
                   ['followups', followUpCounts.escalated > 0 ? `Follow-ups (${followUpCounts.escalated})` : 'Follow-ups'],
                   ['revenue', 'Revenue'],
                   ['arrears', 'Arrears'],
+                  ['rent', 'Rent'],
                   ['attendance', 'Attendance'],
                   ['camp', 'Camp'],
                   ['waitlist', 'Waitlist'],
@@ -4235,6 +4237,11 @@ export default function AdminPage() {
             {/* Arrears tab */}
             {activeTab === 'arrears' && (
               <ArrearsView adminKey={adminKey} />
+            )}
+
+            {/* Rent tab — the monthly statement for the landlord */}
+            {activeTab === 'rent' && (
+              <RentView adminKey={adminKey} />
             )}
 
             {/* Camp tab */}
