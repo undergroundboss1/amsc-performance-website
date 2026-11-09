@@ -88,6 +88,7 @@ export default function RentView({ adminKey }) {
   // them through a number on every keystroke eats the decimal point, so
   // "12.5" can never be typed — it collapses to "12" the moment the dot lands.
   const [pctText, setPctText] = useState({ tsg: '', ttf: '' });
+  const [clientNames, setClientNames] = useState([]);
 
   const asPercentText = n => String(Number((n * 100).toFixed(4)));
 
@@ -118,6 +119,7 @@ export default function RentView({ adminKey }) {
         return;
       }
       adoptStatement(json.statement);
+      setClientNames(json.clientNames || []);
       setDirty(false);
     } catch {
       if (token !== requestRef.current) return;
@@ -147,8 +149,8 @@ export default function RentView({ adminKey }) {
     patch({ rows: statement.rows.map((r, i) => (i === index ? { ...r, ...changes } : r)) });
   }
 
-  function addRow() {
-    patch({ rows: [...statement.rows, { name: '', monthsPaid: 1, totalPaid: 0, commissionable: 0 }] });
+  function addRow(name = '') {
+    patch({ rows: [...statement.rows, { name, monthsPaid: 1, totalPaid: 0, commissionable: 0 }] });
   }
 
   function removeRow(index) {
@@ -223,6 +225,11 @@ export default function RentView({ adminKey }) {
   const tsgPercent = statement?.tsgPercent ?? DEFAULTS.tsgPercent;
   const ttfPercent = statement?.ttfPercent ?? DEFAULTS.ttfPercent;
   const totals = statementTotals(rows, tsgPercent, ttfPercent);
+
+  // Anyone already on the sheet drops out of the picker, so the same person
+  // cannot be added twice and billed twice.
+  const onSheet = new Set(rows.map(r => (r.name || '').trim().toLowerCase()));
+  const unlistedClients = clientNames.filter(n => !onSheet.has(n.trim().toLowerCase()));
 
   return (
     <div>
@@ -409,12 +416,34 @@ export default function RentView({ adminKey }) {
             </table>
           </div>
 
-          <button
-            onClick={addRow}
-            style={{ background: 'transparent', border: '1px dashed #333', color: '#d3d3d3', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', cursor: 'pointer', marginBottom: '20px' }}
-          >
-            + Add line
-          </button>
+          {/* Adding a client. Picking from the roster keeps the spelling
+              identical month to month — to the landlord, "Derrick Ogechi"
+              and "Derick Ogechi" are two different people. The blank line
+              stays for anyone not on the books. */}
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '20px' }}>
+            <select
+              value=""
+              onChange={e => { if (e.target.value) addRow(e.target.value); }}
+              aria-label="Add a client to the statement"
+              style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: '6px', padding: '7px 12px', color: '#f5f5f8', fontSize: '12px', cursor: 'pointer', maxWidth: '100%' }}
+            >
+              <option value="">+ Add a client…</option>
+              {unlistedClients.length === 0 ? (
+                <option value="" disabled>Everyone is already on the sheet</option>
+              ) : (
+                unlistedClients.map(name => <option key={name} value={name}>{name}</option>)
+              )}
+            </select>
+            <button
+              onClick={() => addRow()}
+              style={{ background: 'transparent', border: '1px dashed #333', color: '#d3d3d3', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', cursor: 'pointer' }}
+            >
+              + Blank line
+            </button>
+            <span style={{ fontSize: '11px', color: '#555' }}>
+              Added lines start at zero — type what they paid.
+            </span>
+          </div>
 
           {/* What goes to TTF */}
           <div style={{ background: '#1a1a1a', border: '1px solid #222', borderLeft: '2px solid #a60a08', borderRadius: '8px', padding: '16px', marginBottom: '18px' }}>

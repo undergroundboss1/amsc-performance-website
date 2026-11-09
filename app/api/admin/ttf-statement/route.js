@@ -13,6 +13,10 @@ import { DEFAULTS, buildRowsFromPayments, monthStart, monthRangeUTC } from '../.
  * none has been saved, a draft is built from that month's payments and
  * returned unsaved, with `saved: false`.
  *
+ * Also returns `clientNames`: every client on the books, so a line added by
+ * hand can be picked from the roster rather than typed. The same person
+ * spelled two ways across two months is two people to the landlord.
+ *
  * POST /api/admin/ttf-statement
  *
  * Saves the statement for a month (upsert on month). Body:
@@ -59,6 +63,22 @@ export async function GET(request) {
 
     const supabase = getSupabase();
 
+    // The roster for the "add a client" picker. Online clients are left out
+    // for the same reason they never appear in a draft: they use no facility
+    // and owe no rent, so offering them would only invite a mistake.
+    const { data: clientRows } = await supabase
+      .from('clients')
+      .select('full_name, selected_plan')
+      .order('full_name', { ascending: true });
+
+    const clientNames = [
+      ...new Set(
+        (clientRows || [])
+          .filter(c => c.selected_plan !== 'online' && c.full_name)
+          .map(c => c.full_name.trim())
+      ),
+    ];
+
     const { data: existing, error: readError } = await supabase
       .from('ttf_statements')
       .select('*')
@@ -71,7 +91,7 @@ export async function GET(request) {
     }
 
     if (existing) {
-      return NextResponse.json({ statement: serialize(existing, { saved: true }) });
+      return NextResponse.json({ statement: serialize(existing, { saved: true }), clientNames });
     }
 
     // Nothing saved yet — draft one from the month's payments, bracketed on
@@ -104,6 +124,7 @@ export async function GET(request) {
         updatedBy: null,
         saved: false,
       },
+      clientNames,
     });
   } catch (err) {
     console.error('ttf-statement GET error:', err);
