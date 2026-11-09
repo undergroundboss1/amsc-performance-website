@@ -139,6 +139,21 @@ export default function RentView({ adminKey }) {
     setMonth(next);
   }
 
+  /**
+   * Typing in a percent field. An empty box is someone mid-edit, not a
+   * decision to pay 0% — Number('') is 0, so committing it would quietly
+   * rewrite the split while the field still looks blank. Blur restores the
+   * text from the statement, so a field left empty snaps back rather than
+   * stranding a value nobody chose.
+   */
+  function editPercent(which, text) {
+    setPctText(p => ({ ...p, [which]: text }));
+    if (text.trim() === '') return;
+    const n = Number(text);
+    if (!Number.isFinite(n) || n < 0 || n >= 100) return;
+    patch({ [which === 'tsg' ? 'tsgPercent' : 'ttfPercent']: n / 100 });
+  }
+
   function patch(changes) {
     setStatement(s => ({ ...s, ...changes }));
     setDirty(true);
@@ -302,11 +317,8 @@ export default function RentView({ adminKey }) {
               <input
                 type="number" min="0" max="99" step="0.5"
                 value={pctText.tsg}
-                onChange={e => {
-                  setPctText(p => ({ ...p, tsg: e.target.value }));
-                  const n = Number(e.target.value);
-                  if (Number.isFinite(n) && n >= 0 && n < 100) patch({ tsgPercent: n / 100 });
-                }}
+                onChange={e => editPercent('tsg', e.target.value)}
+                onBlur={() => setPctText(p => ({ ...p, tsg: asPercentText(statement.tsgPercent) }))}
                 style={input({ width: '80px', marginTop: '5px' })}
               />
             </label>
@@ -315,11 +327,8 @@ export default function RentView({ adminKey }) {
               <input
                 type="number" min="0" max="99" step="0.5"
                 value={pctText.ttf}
-                onChange={e => {
-                  setPctText(p => ({ ...p, ttf: e.target.value }));
-                  const n = Number(e.target.value);
-                  if (Number.isFinite(n) && n >= 0 && n < 100) patch({ ttfPercent: n / 100 });
-                }}
+                onChange={e => editPercent('ttf', e.target.value)}
+                onBlur={() => setPctText(p => ({ ...p, ttf: asPercentText(statement.ttfPercent) }))}
                 style={input({ width: '80px', marginTop: '5px' })}
               />
             </label>

@@ -34,6 +34,83 @@ function unauthorized() {
   return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
 }
 
+/**
+ * Who was training at the facility during a given month — not who is training
+ * today.
+ *
+ * A rent sheet is a historical document. December's statement should offer
+ * December's athletes, and if four of them have since paused, that has no
+ * bearing on what was owed in December. So the roster is rebuilt per month
+ * from what actually happened: a payment that month, or a session attended
+ * that month. Attendance matters on its own because someone can train in a
+ * month they did not pay in.
+ *
+ * The month still in progress is the exception. Early in it nobody may have
+ * paid or trained yet, and an empty picker would be useless, so currently
+ * active clients are included while the month is live.
+ */
+async function activeInMonth(supabase, month) {
+  const { start, end } = monthRangeUTC(month);
+
+  // attendance.session_date is a plain calendar date, so it needs calendar
+  // bounds. Slicing the instants above would give 31 May to 30 June for a
+  // June query — dropping anyone who only trained on the 30th, and offering
+  // anyone who trained on 31 May and never came back.
+  const [y, m] = month.split('-').map(Number);
+  const firstOfMonth = `${y}-${String(m).padStart(2, '0')}-01`;
+  const firstOfNext = m === 12
+    ? `${y + 1}-01-01`
+    : `${y}-${String(m + 1).padStart(2, '0')}-01`;
+
+  const [{ data: paid }, { data: attended }] = await Promise.all([
+    supabase
+      .from('payments')
+      .select('client_id')
+      .gte('payment_date', start)
+      .lt('payment_date', end),
+    supabase
+      .from('attendance')
+      .select('client_id')
+      .eq('attended', true)
+      .gte('session_date', firstOfMonth)
+      .lt('session_date', firstOfNext),
+  ]);
+
+  const ids = new Set(
+    [...(paid || []), ...(attended || [])].map(r => r.client_id).filter(Boolean)
+  );
+
+  const names = new Set();
+  const add = rows => (rows || []).forEach(c => c.full_name && names.add(c.full_name.trim()));
+
+  if (ids.size > 0) {
+    const { data } = await supabase
+      .from('clients')
+      .select('full_name')
+      .neq('selected_plan', 'online')
+      .in('id', [...ids]);
+    add(data);
+  }
+
+  const now = new Date();
+  const thisMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+
+  if (month.slice(0, 7) === thisMonth) {
+    const { data } = await supabase
+      .from('clients')
+      .select('full_name')
+      .neq('selected_plan', 'online')
+      .eq('application_status', 'approved')
+      .not('last_paid_at', 'is', null)
+      // training_status is null on rows that predate it, and null means
+      // active — a bare inequality would drop those people.
+      .or('training_status.is.null,training_status.neq.inactive');
+    add(data);
+  }
+
+  return [...names].sort((a, b) => a.localeCompare(b));
+}
+
 function serialize(record, extra = {}) {
   return {
     month: record.month,
@@ -63,28 +140,7 @@ export async function GET(request) {
 
     const supabase = getSupabase();
 
-    // The roster for the "add a client" picker: people actually training at
-    // the facility right now. Same definition of active the Applications tab
-    // uses — approved, has paid at least once, not on a training pause — plus
-    // online clients excluded, since they use no facility and owe no rent.
-    //
-    // A declined applicant or a paused client appearing here would only be a
-    // chance to bill the landlord for someone who was never on the floor.
-    // Anyone genuinely missing is still one click away on "+ Blank line".
-    const { data: clientRows } = await supabase
-      .from('clients')
-      .select('full_name')
-      .eq('application_status', 'approved')
-      .neq('selected_plan', 'online')
-      .not('last_paid_at', 'is', null)
-      // training_status predates some rows and is null for them; null means
-      // active, and a bare neq would drop those rows instead of keeping them.
-      .or('training_status.is.null,training_status.neq.inactive')
-      .order('full_name', { ascending: true });
-
-    const clientNames = [
-      ...new Set((clientRows || []).filter(c => c.full_name).map(c => c.full_name.trim())),
-    ];
+    const clientNames = await activeInMonth(supabase, month);
 
     const { data: existing, error: readError } = await supabase
       .from('ttf_statements')

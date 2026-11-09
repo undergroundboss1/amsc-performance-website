@@ -65,6 +65,16 @@ export async function POST(request) {
     const tsgPercent = pct(body.tsgPercent, DEFAULTS.tsgPercent);
     const ttfPercent = pct(body.ttfPercent, DEFAULTS.ttfPercent);
 
+    // Saving rejects shares that exhaust the whole amount; exporting has to
+    // as well, or an unsaved sheet with a negative "Amount to AMSC" column
+    // could still be sent to the landlord.
+    if (tsgPercent + ttfPercent >= 1) {
+      return Response.json(
+        { error: 'The TSG and TTF shares cannot add up to the whole amount.' },
+        { status: 400 }
+      );
+    }
+
     // Imported here rather than at module scope: it is a large dependency and
     // only this one route needs it.
     const ExcelJS = (await import('exceljs')).default;

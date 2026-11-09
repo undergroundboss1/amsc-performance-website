@@ -3394,6 +3394,9 @@ function RevenueView({ adminKey }) {
   // Which week/month/year is on screen. Only ever used to derive the period's
   // boundaries — never to ask "is this now", which is always a real clock check.
   const [cursor, setCursor] = useState(() => new Date());
+  const [granularity, setGranularity] = useState('monthly');
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
 
   function exportLedgerCSV() {
     const rows = [
@@ -3444,6 +3447,12 @@ function RevenueView({ adminKey }) {
   }
 
   useEffect(() => { fetchAll(); }, [adminKey]);
+
+  // A sensible default cut for each period — days inside a month, months
+  // inside a year — which the dropdown can still override.
+  useEffect(() => {
+    setGranularity({ week: 'daily', month: 'daily', year: 'monthly', all: 'yearly' }[period]);
+  }, [period]);
 
   // ── Date helpers ─────────────────────────────────────────────────────────
   const now = new Date();
@@ -3616,6 +3625,58 @@ function RevenueView({ adminKey }) {
     : periodPayments;
   const searchTotals = sumPayments(filtered);
 
+  // ── Excel export of AMSC's own income ──────────────────────────────────────
+  // The range is whatever period is on screen; the granularity is how finely
+  // it gets cut up inside the file. Sent as calendar dates, not instants, so
+  // the server resolves both the range and the buckets on the same clock.
+  function exportRange() {
+    const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    if (period === 'week') return { from: ymd(weekStart), to: ymd(weekEnd) };
+    if (period === 'month') return { from: ymd(monthStart), to: ymd(monthEnd) };
+    if (period === 'year') return { from: ymd(yearStart), to: ymd(yearEnd) };
+    if (payments.length === 0) return null;
+    const dates = payments.map(p => new Date(p.payment_date).getTime());
+    const last = new Date(Math.max(...dates));
+    last.setDate(last.getDate() + 1); // `to` is exclusive
+    return { from: ymd(new Date(Math.min(...dates))), to: ymd(last) };
+  }
+
+  async function exportExcel() {
+    const range = exportRange();
+    if (!range) { setExportError('There is nothing to export yet.'); return; }
+    setExporting(true);
+    setExportError('');
+    try {
+      const res = await fetch('/api/admin/revenue-export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminKey}` },
+        body: JSON.stringify({
+          from: range.from,
+          to: range.to,
+          granularity,
+          label: period === 'all' ? 'All time' : cursorLabel,
+        }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setExportError(json.error || 'Failed to build the spreadsheet.');
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `AMSC_income_${(period === 'all' ? 'all-time' : cursorLabel).toLowerCase().replace(/[^a-z0-9]+/g, '-')}_${granularity}.xlsx`;
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      setExportError('Network error during export.');
+    } finally {
+      setExporting(false);
+    }
+  }
+
   // ── Period label for header ────────────────────────────────────────────────
   const periodLabel =
     period === 'all'
@@ -3691,6 +3752,36 @@ function RevenueView({ adminKey }) {
             ↑ Import Records
           </button>
         </div>
+      </div>
+
+      {/* AMSC's own income, as a spreadsheet: gross against net for the
+          period on screen, cut by whichever granularity is chosen. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
+        <span style={{ fontFamily: 'Oswald, sans-serif', fontWeight: 700, fontSize: '10px', letterSpacing: '0.1em', color: '#555', textTransform: 'uppercase' }}>
+          Income report
+        </span>
+        <select
+          value={granularity}
+          onChange={e => setGranularity(e.target.value)}
+          aria-label="Report granularity"
+          style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: '6px', padding: '6px 10px', color: '#f5f5f8', fontSize: '12px', cursor: 'pointer' }}
+        >
+          <option value="daily">Daily</option>
+          <option value="monthly">Monthly</option>
+          <option value="quarterly">Quarterly</option>
+          <option value="yearly">Yearly</option>
+        </select>
+        <button
+          onClick={exportExcel}
+          disabled={exporting || payments.length === 0}
+          style={{ background: 'transparent', border: '1px solid #333', color: '#d3d3d3', borderRadius: '6px', padding: '6px 14px', fontSize: '12px', fontWeight: 600, cursor: exporting || payments.length === 0 ? 'not-allowed' : 'pointer', opacity: exporting || payments.length === 0 ? 0.4 : 1 }}
+        >
+          {exporting ? 'Building…' : '↓ Export Excel'}
+        </button>
+        <span style={{ fontSize: '11px', color: '#555' }}>
+          Gross vs net for {period === 'all' ? 'all time' : cursorLabel}, broken down {granularity === 'daily' ? 'by day' : granularity === 'monthly' ? 'by month' : granularity === 'quarterly' ? 'by quarter' : 'by year'}.
+        </span>
+        {exportError && <span style={{ fontSize: '12px', color: '#fca5a5' }}>{exportError}</span>}
       </div>
 
       {/* Period navigator — step back through weeks, months or years */}
