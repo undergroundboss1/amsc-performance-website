@@ -4,6 +4,7 @@ import { getPlanById } from '../../../../lib/plans';
 import { sendEmail, buildReceiptEmail } from '../../../../lib/email';
 import { getAdminActor } from '../../../../lib/admin-auth';
 import { logAdminAction } from '../../../../lib/admin-audit';
+import { resolvePaidThrough } from '../../../../lib/billing';
 
 const METHOD_LABELS = {
   manual_cash: 'Cash',
@@ -79,7 +80,7 @@ export async function POST(request) {
     // ── Fetch client for plan info ──────────────────────────────────────────
     const { data: client, error: fetchError } = await supabase
       .from('clients')
-      .select('id, full_name, email, selected_plan, plan_price, payment_status, last_paid_at')
+      .select('id, full_name, email, selected_plan, plan_price, payment_status, last_paid_at, training_start_date, training_status, pause_credit_days, payment_provider')
       .eq('id', clientId)
       .single();
 
@@ -117,7 +118,8 @@ export async function POST(request) {
 
     if (shouldUpdateLastPaid) {
       await supabase.from('clients').update({
-        last_paid_at: parsedDate.toISOString(),
+        // Early payments are credited from the due date (see lib/billing.js).
+        last_paid_at: resolvePaidThrough(client, parsedDate),
         payment_status: 'paid',
         reminders_sent: {}, // reset so next billing cycle gets fresh reminders
         overdue_ack_note: null, // clear any "continue while overdue" note

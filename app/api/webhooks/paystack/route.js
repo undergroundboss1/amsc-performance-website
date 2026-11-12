@@ -10,6 +10,7 @@ import {
   buildRenewalFailedEmail,
 } from '../../../../lib/email';
 import { getEffectiveMonthlyRate } from '../../../../lib/plans';
+import { resolvePaidThrough } from '../../../../lib/billing';
 import { sendCampOutcomeEmail } from '../../../../lib/camp-notifications';
 
 /**
@@ -144,9 +145,18 @@ export async function POST(request) {
       const paidAt = data.paid_at || new Date().toISOString();
       const amountKes = data.amount / 100;
 
+      // Read the client's billing state BEFORE applying this payment, so an
+      // early payment (paid a few days before the due date) is credited to the
+      // coming cycle instead of the one they're already covered for.
+      const { data: clientBefore } = await supabase
+        .from('clients')
+        .select('last_paid_at, training_start_date, training_status, pause_credit_days, payment_provider')
+        .eq('payment_reference', reference)
+        .maybeSingle();
+
       const updateFields = {
         payment_status: 'paid',
-        last_paid_at: paidAt,
+        last_paid_at: clientBefore ? resolvePaidThrough(clientBefore, paidAt) : paidAt,
         reminders_sent: {}, // reset so next billing cycle gets fresh reminders
         overdue_ack_note: null, // clear any "continue while overdue" note
         overdue_ack_at: null,
